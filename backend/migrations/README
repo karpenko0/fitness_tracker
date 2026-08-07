@@ -1,0 +1,3 @@
+A directory for Alembic migrations.
+
+Use the `alembic` CLI from the backend folder to generate and apply migrations.

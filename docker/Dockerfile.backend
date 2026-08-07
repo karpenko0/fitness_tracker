@@ -1,0 +1,25 @@
+# Backend Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Установить системные зависимости
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Скопировать requirements
+COPY backend/requirements.txt /app/requirements.txt
+
+# Установить Python зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Скопировать приложение
+COPY backend /app
+
+# Порт
+EXPOSE 8000
+
+# Команда по умолчанию
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,34 @@
+# Frontend Dockerfile
+FROM node:18-alpine as builder
+
+WORKDIR /app
+
+# Скопировать package.json
+COPY frontend/package*.json /app/
+
+# Установить зависимости
+RUN npm ci
+
+# Скопировать исходный код
+COPY frontend /app/
+
+# Собрать приложение
+RUN npm run build
+
+# Финальный образ
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Установить serve для serving статических файлов
+RUN npm install -g serve
+
+# Скопировать build из builder
+COPY --from=builder /app/build /app/build
+COPY --from=builder /app/package.json /app/package.json
+
+# Порт
+EXPOSE 3000
+
+# Команда запуска
+CMD ["serve", "-s", "build", "-l", "3000"]
