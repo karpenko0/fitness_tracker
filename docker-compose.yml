@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fitness_tracker_db
+    environment:
+      POSTGRES_USER: fitness_user
+      POSTGRES_PASSWORD: fitness_password
+      POSTGRES_DB: fitness_tracker
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitness_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fitness_network
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: fitness_tracker_api
+    environment:
+      DATABASE_URL: postgresql://fitness_user:fitness_password@postgres:5432/fitness_tracker
+      JWT_SECRET_KEY: your-secret-key-change-in-production-min-32-chars
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    volumes:
+      - ./backend:/app/backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "python -m alembic upgrade head &&
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    networks:
+      - fitness_network
+
+  # Frontend App
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: fitness_tracker_web
+    environment:
+      REACT_APP_API_URL: http://localhost:8000/api/v1
+      REACT_APP_ENVIRONMENT: development
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - fitness_network
+
+volumes:
+  postgres_data:
+
+networks:
+  fitness_network:
+    driver: bridge
