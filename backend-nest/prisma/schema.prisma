@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_DELETION
+  DELETED
+  BLOCKED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  NOT_SPECIFIED
+}
+
+enum FitnessGoal {
+  WEIGHT_LOSS
+  MUSCLE_GAIN
+  MAINTENANCE
+  HEALTH
+  FLEXIBILITY
+  ENDURANCE
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum TrainingLocation {
+  GYM
+  HOME
+  OUTDOOR
+  MIXED
+}
+
+model User {
+  id                    String       @id @default(uuid())
+  telegramId            BigInt       @unique
+  telegramUsername      String?      @db.VarChar(255)
+  firstName             String       @db.VarChar(255)
+  lastName              String?      @db.VarChar(255)
+  telegramLanguageCode  String?      @db.VarChar(16)
+  telegramPhotoUrl      String?
+  status                UserStatus   @default(ACTIVE)
+  lastLoginAt           DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
+  profile               UserProfile?
+  roles                 UserRole[]
+  assignedRoles         UserRole[]    @relation("assignedByUser")
+  authSessions          AuthSession[]
+  auditLogs             AuditLog[]    @relation("actorUser")
+  auditTargets          AuditLog[]    @relation("targetUser")
+}
+
+model UserProfile {
+  id                     String            @id @default(uuid())
+  user                   User              @relation(fields: [userId], references: [id])
+  userId                 String            @unique
+  gender                 Gender?
+  birthDate              DateTime?
+  heightCm               Int?
+  weightKg               Decimal?          @db.Decimal(5, 1)
+  fitnessGoal            FitnessGoal?
+  experienceLevel        ExperienceLevel?
+  trainingLocation       TrainingLocation?
+  trainingFrequency      Int?
+  preferredWorkoutDuration Int?
+  equipment              Json              @default("[]")
+  limitations            String?
+  trainingPreferences    Json              @default("[]")
+  nutritionPlanNeeded    Boolean           @default(false)
+  notificationDays       Json              @default("[]")
+  notificationTime       String?
+  locale                 String            @default("ru")
+  timezone               String            @default("UTC")
+  onboardingCompleted    Boolean           @default(false)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  code        String     @unique @db.VarChar(64)
+  name        String     @db.VarChar(128)
+  description String?
+  createdAt   DateTime   @default(now())
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  userId        String
+  roleId        String
+  assignedById  String?
+  createdAt     DateTime   @default(now())
+
+  user          User       @relation(fields: [userId], references: [id])
+  role          Role       @relation(fields: [roleId], references: [id])
+  assignedBy    User?      @relation("assignedByUser", fields: [assignedById], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model AuthSession {
+  id               String    @id @default(uuid())
+  user             User      @relation(fields: [userId], references: [id])
+  userId           String
+  refreshTokenHash String    @db.VarChar(255)
+  ipHash           String?   @db.VarChar(255)
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?   @db.VarChar(128)
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@index([refreshTokenHash])
+}
+
+model AuditLog {
+  id            String    @id @default(uuid())
+  actorUserId   String?   
+  targetUserId  String?
+  action        String    @db.VarChar(128)
+  entityType    String    @db.VarChar(128)
+  entityId      String?
+  metadata      Json      @default("{}")
+  requestId     String?   @db.VarChar(128)
+  ipHash        String?   @db.VarChar(255)
+  createdAt     DateTime  @default(now())
+
+  actorUser     User?     @relation("actorUser", fields: [actorUserId], references: [id])
+  targetUser    User?     @relation("targetUser", fields: [targetUserId], references: [id])
+}
