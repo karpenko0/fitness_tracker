@@ -1,15 +1,13 @@
-import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException, Inject, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient, UserStatus } from '@prisma/client';
+import { PrismaClient, UserStatus, Prisma } from '@prisma/client';
 import { TelegramValidationService } from './services/telegram-validation.service';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger('AuthService');
-
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -19,13 +17,16 @@ export class AuthService {
 
   async loginWithTelegram(initData: string) {
     const botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
+    if (!botToken) {
+      throw new BadRequestException({ code: 'CONFIG_ERROR', message: 'TELEGRAM_BOT_TOKEN is not configured' });
+    }
     const maxAge = Number(this.configService.get<number>('TELEGRAM_INIT_DATA_MAX_AGE_SECONDS') || 86400);
 
     const parsed = this.telegramValidationService.validateInitData(initData, botToken, maxAge);
     const tgUser = parsed.user;
     const telegramId = BigInt(tgUser.id);
 
-    const result = await this.prisma.$transaction(async prisma => {
+    const result = await this.prisma.$transaction(async (prisma: Prisma.TransactionClient) => {
       let user = await prisma.user.findUnique({ where: { telegramId }, include: { profile: true, roles: { include: { role: true } } } });
       let isNewUser = false;
 
@@ -42,7 +43,6 @@ export class AuthService {
               roles: {
                 create: {
                   role: { connect: { code: 'USER' } },
-                  assignedById: null,
                 },
               },
               profile: {
@@ -110,6 +110,10 @@ export class AuthService {
         });
       }
 
+      if (!user) {
+        throw new UnauthorizedException({ code: 'USER_NOT_FOUND', message: 'User was not found' });
+      }
+
       const session = await this.createSession(prisma, user.id);
       await prisma.auditLog.create({
         data: {
@@ -138,14 +142,14 @@ export class AuthService {
           createdAt: user.createdAt,
         },
         profile: {
-          userId: user.profile!.userId,
-          onboardingCompleted: user.profile!.onboardingCompleted,
-          locale: user.profile!.locale,
-          timezone: user.profile!.timezone,
-          fitnessGoal: user.profile!.fitnessGoal,
-          experienceLevel: user.profile!.experienceLevel,
-          heightCm: user.profile!.heightCm,
-          weightKg: user.profile!.weightKg,
+          userId: user.profile?.userId,
+          onboardingCompleted: user.profile?.onboardingCompleted,
+          locale: user.profile?.locale,
+          timezone: user.profile?.timezone,
+          fitnessGoal: user.profile?.fitnessGoal,
+          experienceLevel: user.profile?.experienceLevel,
+          heightCm: user.profile?.heightCm,
+          weightKg: user.profile?.weightKg,
         },
       };
     });
@@ -153,7 +157,7 @@ export class AuthService {
     return result;
   }
 
-  private async createSession(prisma: PrismaClient, userId: string) {
+  private async createSession(prisma: Prisma.TransactionClient, userId: string) {
     const rawToken = `rt_${randomBytes(32).toString('hex')}`;
     const hash = await argon2.hash(rawToken, { type: argon2.argon2id });
     const expiresAt = new Date(Date.now() + Number(this.configService.get<number>('REFRESH_TOKEN_TTL_DAYS') || 30) * 24 * 60 * 60 * 1000);
@@ -201,7 +205,7 @@ export class AuthService {
       throw new ForbiddenException({ code: 'ACCOUNT_DELETED', message: 'Account deleted or blocked' });
     }
 
-    const result = await this.prisma.$transaction(async prisma => {
+    const result = await this.prisma.$transaction(async (prisma: Prisma.TransactionClient) => {
       await prisma.authSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: 'ROTATED' } });
       const newSession = await this.createSession(prisma, session.userId);
       await prisma.auditLog.create({
