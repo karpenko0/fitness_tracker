@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Supabase: generate Prisma client",
+      "type": "npm",
+      "script": "prisma:generate",
+      "path": "backend-nest/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: apply migrations",
+      "type": "npm",
+      "script": "prisma:migrate",
+      "path": "backend-nest/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Supabase: seed database",
+      "type": "npm",
+      "script": "prisma:seed",
+      "path": "backend-nest/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: start dev",
+      "type": "npm",
+      "script": "start:dev",
+      "path": "backend-nest/",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc-watch",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Application is running"
+        }
+      }
+    }
+  ]
+}

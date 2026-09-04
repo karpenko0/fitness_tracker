@@ -1,11 +1,3 @@
--- Drop tables if exist for reset
-DROP TABLE IF EXISTS "AuditLog";
-DROP TABLE IF EXISTS "AuthSession";
-DROP TABLE IF EXISTS "UserRole";
-DROP TABLE IF EXISTS "Role";
-DROP TABLE IF EXISTS "UserProfile";
-DROP TABLE IF EXISTS "User";
-
 CREATE TABLE "User" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   "telegramId" bigint NOT NULL UNIQUE,

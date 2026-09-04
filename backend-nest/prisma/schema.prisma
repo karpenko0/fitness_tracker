@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserStatus {
@@ -25,8 +26,10 @@ enum FitnessGoal {
   MUSCLE_GAIN
   MAINTENANCE
   HEALTH
+  STRENGTH
   FLEXIBILITY
   ENDURANCE
+  MOBILITY_RECOVERY
 }
 
 enum ExperienceLevel {
@@ -61,6 +64,12 @@ model User {
   authSessions          AuthSession[]
   auditLogs             AuditLog[]    @relation("actorUser")
   auditTargets          AuditLog[]    @relation("targetUser")
+  onboardingDrafts      OnboardingDraft[]
+  programAssignments    UserProgramAssignment[]
+  workouts              Workout[]
+  notifications         Notification[]
+  idempotencyKeys       IdempotencyKey[]
+  outboxEvents           OutboxEvent[]
 }
 
 model UserProfile {
@@ -85,8 +94,181 @@ model UserProfile {
   locale                 String            @default("ru")
   timezone               String            @default("UTC")
   onboardingCompleted    Boolean           @default(false)
+  onboardingCompletedAt  DateTime?
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
+}
+
+enum OnboardingDraftStatus {
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+enum OnboardingStep {
+  GOAL
+  TRAINING_CONTEXT
+  EXPERIENCE
+  BODY_DATA
+  EQUIPMENT
+  LIMITATIONS
+  REMINDERS
+  NUTRITION
+  REVIEW
+}
+enum ProgramStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+enum AssignmentSource {
+  ONBOARDING
+  ADMIN
+  TRAINER
+  USER
+}
+enum AssignmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+enum WorkoutStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+enum WorkoutSource {
+  ONBOARDING
+  USER
+  SYSTEM
+}
+enum NotificationType {
+  WORKOUT_REMINDER
+}
+enum NotificationStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+enum NotificationSource {
+  ONBOARDING
+  SYSTEM
+}
+
+model OnboardingDraft {
+  id             String                @id @default(uuid())
+  user           User                  @relation(fields: [userId], references: [id])
+  userId         String
+  status         OnboardingDraftStatus @default(IN_PROGRESS)
+  currentStep    OnboardingStep        @default(GOAL)
+  completedSteps Json                  @default("[]")
+  draftData      Json                  @default("{}")
+  version        Int                   @default(1)
+  expiresAt      DateTime
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@index([updatedAt])
+}
+
+model StarterProgram {
+  id                String                  @id @default(uuid())
+  title             String
+  status            ProgramStatus           @default(DRAFT)
+  active            Boolean                 @default(true)
+  goals             Json                    @default("[]")
+  levels            Json                    @default("[]")
+  locations         Json                    @default("[]")
+  workoutsPerWeek   Int
+  durationMinutes   Int
+  requiredEquipment Json                    @default("[]")
+  contraindications Json                    @default("[]")
+  firstWorkoutTitle String                  @default("Тренировка 1")
+  isFallback        Boolean                 @default(false)
+  assignments       UserProgramAssignment[]
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([status, active])
+}
+
+model UserProgramAssignment {
+  id        String             @id @default(uuid())
+  user      User               @relation(fields: [userId], references: [id])
+  userId    String
+  program   StarterProgram     @relation(fields: [programId], references: [id])
+  programId String
+  source    AssignmentSource
+  status    AssignmentStatus   @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  createdAt DateTime           @default(now())
+  workouts  Workout[]
+
+  @@unique([userId, programId, source])
+  @@index([userId, status])
+}
+
+model Workout {
+  id                  String                @id @default(uuid())
+  user                User                  @relation(fields: [userId], references: [id])
+  userId              String
+  programAssignment   UserProgramAssignment @relation(fields: [programAssignmentId], references: [id])
+  programAssignmentId String
+  status              WorkoutStatus         @default(PLANNED)
+  source              WorkoutSource
+  scheduledFor        DateTime
+  title               String
+  createdAt           DateTime              @default(now())
+
+  @@unique([programAssignmentId, scheduledFor])
+  @@index([userId, scheduledFor])
+}
+
+model Notification {
+  id           String              @id @default(uuid())
+  user         User                @relation(fields: [userId], references: [id])
+  userId       String
+  type         NotificationType
+  scheduleDays Json
+  scheduleTime String
+  timezone     String
+  status       NotificationStatus  @default(ACTIVE)
+  source       NotificationSource
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([userId, type, source])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String
+  key            String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([userId, key])
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      String?
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([publishedAt, createdAt])
 }
 
 model Role {

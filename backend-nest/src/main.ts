@@ -1,9 +1,10 @@
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { ThrottlerExceptionFilter } from './common/filters/throttler-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
@@ -13,9 +14,18 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: (errors) => new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Request validation failed',
+        details: errors.map((error) => ({
+          field: error.property,
+          constraints: error.constraints,
+        })),
+      }),
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(new ThrottlerExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
   const config = new DocumentBuilder()

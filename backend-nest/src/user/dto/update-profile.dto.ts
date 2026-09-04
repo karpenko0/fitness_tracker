@@ -1,6 +1,24 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, Matches, ArrayUnique } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, Matches, ArrayUnique, ValidateIf, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments, Validate } from 'class-validator';
 import { Type } from 'class-transformer';
+
+@ValidatorConstraint({ name: 'isIanaTimezone', async: false })
+class IsIanaTimezoneConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    return `${args.property} must be a valid IANA timezone`;
+  }
+}
 
 export enum GenderEnum {
   MALE = 'MALE',
@@ -38,7 +56,9 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional({ description: 'Birth date in YYYY-MM-DD format' })
   @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'birthDate must be in YYYY-MM-DD format' })
+  @IsDateString({}, { message: 'birthDate must be a valid ISO date' })
   birthDate?: string | null;
 
   @ApiPropertyOptional({ description: 'Height in cm', minimum: 100, maximum: 250 })
@@ -135,5 +155,6 @@ export class UpdateProfileDto {
   @ApiPropertyOptional({ description: 'IANA timezone' })
   @IsOptional()
   @IsString()
+  @Validate(IsIanaTimezoneConstraint)
   timezone?: string;
 }

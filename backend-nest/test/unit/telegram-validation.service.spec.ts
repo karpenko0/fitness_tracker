@@ -47,6 +47,32 @@ describe('TelegramValidationService', () => {
     const hash = require('crypto').createHmac('sha256', secretKey).update('auth_date=' + values.auth_date + '\nuser=' + values.user).digest('hex');
     const initData = `auth_date=${values.auth_date}&user=${encodeURIComponent(values.user)}&hash=${hash}`;
 
-    expect(() => service.validateInitData(initData, botToken, 10)).toThrow(UnauthorizedException);
+    try {
+      service.validateInitData(initData, botToken, 10);
+      fail('Expected expired initData to be rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect((error as UnauthorizedException).getResponse()).toMatchObject({
+        code: 'TELEGRAM_INIT_DATA_EXPIRED',
+      });
+    }
+  });
+
+  it('should reject a tampered signature with TELEGRAM_INIT_DATA_INVALID', () => {
+    const initData = [
+      `auth_date=${Math.floor(Date.now() / 1000)}`,
+      `user=${encodeURIComponent(JSON.stringify({ id: 123, first_name: 'Ivan' }))}`,
+      'hash=invalid',
+    ].join('&');
+
+    try {
+      service.validateInitData(initData, 'test_token', 86400);
+      fail('Expected invalid initData to be rejected');
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect((error as UnauthorizedException).getResponse()).toMatchObject({
+        code: 'TELEGRAM_INIT_DATA_INVALID',
+      });
+    }
   });
 });

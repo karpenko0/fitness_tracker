@@ -26,46 +26,34 @@ export class AuthService {
     const tgUser = parsed.user;
     const telegramId = BigInt(tgUser.id);
 
-    const result = await this.prisma.$transaction(async (prisma: Prisma.TransactionClient) => {
+    const loginTransaction = () => this.prisma.$transaction(async (prisma: Prisma.TransactionClient) => {
       let user = await prisma.user.findUnique({ where: { telegramId }, include: { profile: true, roles: { include: { role: true } } } });
       let isNewUser = false;
 
       if (!user) {
-        try {
-          user = await prisma.user.create({
-            data: {
-              telegramId,
-              telegramUsername: tgUser.username,
-              firstName: tgUser.first_name,
-              lastName: tgUser.last_name,
-              telegramLanguageCode: tgUser.language_code,
-              telegramPhotoUrl: tgUser.photo_url,
-              roles: {
-                create: {
-                  role: { connect: { code: 'USER' } },
-                },
-              },
-              profile: {
-                create: {
-                  locale: tgUser.language_code === 'en' ? 'en' : 'ru',
-                  timezone: 'UTC',
-                },
+        user = await prisma.user.create({
+          data: {
+            telegramId,
+            telegramUsername: tgUser.username,
+            firstName: tgUser.first_name,
+            lastName: tgUser.last_name,
+            telegramLanguageCode: tgUser.language_code,
+            telegramPhotoUrl: tgUser.photo_url,
+            roles: {
+              create: {
+                role: { connect: { code: 'USER' } },
               },
             },
-            include: { profile: true, roles: { include: { role: true } } },
-          });
-          isNewUser = true;
-        } catch (error: any) {
-          const target = error?.meta?.target;
-          const targetStr = Array.isArray(target) ? target.join(',') : String(target || '');
-          const isTelegramUnique = error?.code === 'P2002' && /telegram/i.test(targetStr);
-          if (isTelegramUnique) {
-            user = await prisma.user.findUnique({ where: { telegramId }, include: { profile: true, roles: { include: { role: true } } } });
-            if (!user) throw error;
-          } else {
-            throw error;
-          }
-        }
+            profile: {
+              create: {
+                locale: tgUser.language_code === 'en' ? 'en' : 'ru',
+                timezone: 'UTC',
+              },
+            },
+          },
+          include: { profile: true, roles: { include: { role: true } } },
+        });
+        isNewUser = true;
 
         if (user && isNewUser) {
           await prisma.auditLog.create({
@@ -74,7 +62,7 @@ export class AuthService {
               entityType: 'User',
               entityId: user.id,
               actorUserId: user.id,
-              metadata: { telegramId: tgUser.id },
+              metadata: {},
             },
           });
         }
@@ -154,6 +142,21 @@ export class AuthService {
       };
     });
 
+    let result;
+    try {
+      result = await loginTransaction();
+    } catch (error: any) {
+      // A concurrent first login can win the telegramId unique constraint.
+      // Retry outside the failed transaction so Prisma can start a new one.
+      const target = error?.meta?.target;
+      const targetStr = Array.isArray(target) ? target.join(',') : String(target || '');
+      if (error?.code === 'P2002' && /telegram/i.test(targetStr)) {
+        result = await loginTransaction();
+      } else {
+        throw error;
+      }
+    }
+
     return result;
   }
 
@@ -206,7 +209,15 @@ export class AuthService {
     }
 
     const result = await this.prisma.$transaction(async (prisma: Prisma.TransactionClient) => {
-      await prisma.authSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: 'ROTATED' } });
+      const revoked = await prisma.authSession.updateMany({
+        where: { id: session.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        data: { revokedAt: new Date(), revokedReason: 'ROTATED' },
+      });
+
+      if (revoked.count !== 1) {
+        throw new UnauthorizedException({ code: 'REFRESH_TOKEN_INVALID', message: 'Refresh token is invalid' });
+      }
+
       const newSession = await this.createSession(prisma, session.userId);
       await prisma.auditLog.create({
         data: {

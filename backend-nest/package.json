@@ -5,10 +5,10 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "start": "nest start",
-    "build": "nest build",
+    "build": "nest build -p tsconfig.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:seed": "npm run prisma:generate && ts-node prisma/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -19,6 +19,8 @@
     "@nestjs/jwt": "^10.0.0",
     "@nestjs/passport": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/swagger": "^7.4.2",
+    "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^5.0.0",
     "argon2": "^0.31.2",
     "class-transformer": "^0.5.1",
