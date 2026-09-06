@@ -35,3 +35,6 @@ RATE_LIMIT_WINDOW_SECONDS=60
 # Frontend
 REACT_APP_API_URL=http://localhost:8000/api/v1
 REACT_APP_ENVIRONMENT=development
+
+#telegram
+token_bot 8508061457:AAHjIJPwJ_4xLxrUWJcXTIjV0gK1CN-upEY

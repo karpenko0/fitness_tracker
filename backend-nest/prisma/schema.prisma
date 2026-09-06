@@ -67,6 +67,8 @@ model User {
   onboardingDrafts      OnboardingDraft[]
   programAssignments    UserProgramAssignment[]
   workouts              Workout[]
+  dashboardSnapshots    DashboardSnapshot[]
+  dailyStates           UserDailyState[]
   notifications         Notification[]
   idempotencyKeys       IdempotencyKey[]
   outboxEvents           OutboxEvent[]
@@ -136,8 +138,35 @@ enum AssignmentStatus {
 enum WorkoutStatus {
   PLANNED
   IN_PROGRESS
+  PAUSED
   COMPLETED
+  MISSED
   CANCELLED
+}
+
+enum DashboardSnapshotStatus {
+  ACTIVE
+  INVALIDATED
+  EXPIRED
+}
+
+enum DashboardDayState {
+  ONBOARDING_REQUIRED
+  WORKOUT_IN_PROGRESS
+  WORKOUT_PLANNED
+  REST_DAY
+  PROGRAM_REQUIRED
+  WORKOUT_MISSED
+}
+
+enum DashboardPrimaryActionType {
+  RESUME_WORKOUT
+  CONTINUE_ONBOARDING
+  START_WORKOUT
+  RESCHEDULE_WORKOUT
+  VIEW_PROGRAM
+  CHOOSE_PROGRAM
+  REST_DAY
 }
 enum WorkoutSource {
   ONBOARDING
@@ -227,6 +256,56 @@ model Workout {
 
   @@unique([programAssignmentId, scheduledFor])
   @@index([userId, scheduledFor])
+}
+
+model DashboardSnapshot {
+  id              String                  @id @default(uuid())
+  userId          String
+  localDate       DateTime                @db.Date
+  timezone        String                  @db.VarChar(64)
+  locale          String                  @db.VarChar(8)
+  algorithmVersion String                 @db.VarChar(32)
+  snapshotData    Json
+  sourceVersion   BigInt
+  version         Int                     @default(1)
+  status          DashboardSnapshotStatus @default(ACTIVE)
+  generatedAt     DateTime
+  expiresAt       DateTime
+  invalidatedAt   DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, localDate, timezone, locale, algorithmVersion])
+  @@index([userId, status, expiresAt])
+  @@index([expiresAt])
+}
+
+model UserDailyState {
+  id                   String                    @id @default(uuid())
+  userId               String
+  localDate            DateTime                  @db.Date
+  timezone             String                    @db.VarChar(64)
+  state                DashboardDayState
+  primaryActionType    DashboardPrimaryActionType
+  activeWorkoutId      String?
+  plannedWorkoutId     String?
+  activeProgramId      String?
+  completedWorkoutCount Int                      @default(0)
+  plannedWorkoutCount  Int                       @default(0)
+  sourceVersion        BigInt
+  version              Int                       @default(1)
+  calculatedAt         DateTime
+  expiresAt            DateTime
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, localDate, timezone])
+  @@index([userId, localDate])
+  @@index([state, expiresAt])
 }
 
 model Notification {

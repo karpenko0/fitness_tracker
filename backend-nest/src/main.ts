@@ -29,8 +29,8 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
 
   const config = new DocumentBuilder()
-    .setTitle('FitTracker Pro Auth')
-    .setDescription('Telegram Mini App authorization and profile management API')
+    .setTitle('FitTracker Pro API')
+    .setDescription('Telegram Mini App authorization, onboarding, profile and dashboard API')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
