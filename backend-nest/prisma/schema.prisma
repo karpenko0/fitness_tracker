@@ -70,6 +70,7 @@ model User {
   dashboardSnapshots    DashboardSnapshot[]
   dailyStates           UserDailyState[]
   notifications         Notification[]
+  measurements          Measurement[]
   idempotencyKeys       IdempotencyKey[]
   outboxEvents           OutboxEvent[]
 }
@@ -235,6 +236,7 @@ model UserProgramAssignment {
   source    AssignmentSource
   status    AssignmentStatus   @default(ACTIVE)
   startedAt DateTime           @default(now())
+  rescheduleMissedWorkouts Boolean @default(false)
   createdAt DateTime           @default(now())
   workouts  Workout[]
 
@@ -252,10 +254,101 @@ model Workout {
   source              WorkoutSource
   scheduledFor        DateTime
   title               String
+  startedAt           DateTime?
+  completedAt         DateTime?
+  estimatedDurationMinutes Int?
+  version             Int                   @default(1)
   createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  sessions            WorkoutSession[]
+  exercises           WorkoutExercise[]
 
   @@unique([programAssignmentId, scheduledFor])
   @@index([userId, scheduledFor])
+}
+
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkoutExerciseKind {
+  STRENGTH
+  CARDIO
+  MOBILITY
+  OTHER
+}
+
+enum WorkoutSetStatus {
+  PLANNED
+  COMPLETED
+  SKIPPED
+}
+
+model WorkoutSession {
+  id                String               @id @default(uuid())
+  workout           Workout              @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId         String               @unique
+  status            WorkoutSessionStatus @default(IN_PROGRESS)
+  startedAt         DateTime             @default(now())
+  pausedAt          DateTime?
+  completedAt       DateTime?
+  durationSeconds   Int?
+  version           Int                  @default(1)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([status, startedAt])
+}
+
+model WorkoutExercise {
+  id                String               @id @default(uuid())
+  workout           Workout              @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId         String
+  title             String
+  kind              WorkoutExerciseKind @default(STRENGTH)
+  position          Int
+  completedAt       DateTime?
+  version           Int                  @default(1)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  sets              WorkoutSet[]
+
+  @@unique([workoutId, position])
+  @@index([workoutId, position])
+}
+
+model WorkoutSet {
+  id                String           @id @default(uuid())
+  exercise          WorkoutExercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId        String
+  position          Int
+  status            WorkoutSetStatus @default(PLANNED)
+  reps              Int?
+  weightKg          Decimal?         @db.Decimal(7, 2)
+  durationSeconds   Int?
+  completedAt       DateTime?
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([exerciseId, position])
+  @@index([exerciseId, status])
+}
+
+model Measurement {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  weightKg  Decimal? @db.Decimal(5, 1)
+  measuredAt DateTime @default(now())
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, measuredAt])
 }
 
 model DashboardSnapshot {

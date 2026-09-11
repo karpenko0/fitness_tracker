@@ -5,7 +5,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 export class DashboardQueryDto {
   @ApiPropertyOptional({ default: false })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === undefined ? false : value === true || value === 'true' ? true : value === false || value === 'false' ? false : value)
   @IsBoolean()
   forceRefresh = false;
 }

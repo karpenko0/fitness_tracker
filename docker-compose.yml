@@ -1,6 +1,21 @@
-version: '3.8'
-
 services:
+  # Shared Redis cache and rate-limit store
+  redis:
+    image: redis:7-alpine
+    container_name: fitness_tracker_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fitness_network
+
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
@@ -30,19 +45,22 @@ services:
     container_name: fitness_tracker_api
     environment:
       DATABASE_URL: postgresql://fitness_user:fitness_password@postgres:5432/fitness_tracker
-      JWT_SECRET_KEY: your-secret-key-change-in-production-min-32-chars
+      JWT_ACCESS_SECRET: your-secret-key-change-in-production-min-32-chars
+      DIRECT_URL: postgresql://fitness_user:fitness_password@postgres:5432/fitness_tracker
+      REDIS_URL: redis://redis:6379
+      REDIS_REQUIRED: "true"
+      PORT: 8000
       ENVIRONMENT: development
       LOG_LEVEL: INFO
-    volumes:
-      - ./backend:/app/backend
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
-      sh -c "python -m alembic upgrade head &&
-             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "npm run prisma:migrate && node dist/main.js"
     networks:
       - fitness_network
 
@@ -67,6 +85,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   fitness_network:

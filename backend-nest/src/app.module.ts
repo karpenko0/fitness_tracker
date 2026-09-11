@@ -7,6 +7,7 @@ import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { WorkoutModule } from './workout/workout.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     UserModule,
     OnboardingModule,
     DashboardModule,
+    WorkoutModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

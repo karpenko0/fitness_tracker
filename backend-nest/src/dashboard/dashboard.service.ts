@@ -5,14 +5,15 @@ import { DashboardAggregationService } from './dashboard-aggregation.service';
 import { DashboardSnapshotService } from './dashboard-snapshot.service';
 import { DashboardTimezoneService } from './timezone.service';
 import { DashboardMetricsService } from './dashboard-metrics.service';
-import { UserDailyStateService } from './user-daily-state.service';
+import { ForceRefreshLimitService } from './force-refresh-limit.service';
 
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger('dashboard');
-  constructor(private readonly prisma: PrismaClient, private readonly aggregation: DashboardAggregationService, private readonly snapshots: DashboardSnapshotService, private readonly timezone: DashboardTimezoneService, private readonly metrics: DashboardMetricsService, private readonly dailyState: UserDailyStateService, private readonly config: ConfigService) {}
+  constructor(private readonly prisma: PrismaClient, private readonly aggregation: DashboardAggregationService, private readonly snapshots: DashboardSnapshotService, private readonly timezone: DashboardTimezoneService, private readonly metrics: DashboardMetricsService, private readonly config: ConfigService, private readonly forceRefreshLimit: ForceRefreshLimitService) {}
   async get(userId: string, timezoneHeader: string | undefined, localeHeader: string | undefined, forceRefresh: boolean, requestId: string) {
     const started = Date.now();
+    if (forceRefresh) await this.forceRefreshLimit.check(userId);
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
     if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User was not found' });
     if (user.status === UserStatus.DELETED || user.status === UserStatus.PENDING_DELETION) throw new ForbiddenException({ code: 'ACCOUNT_DELETED', message: 'Account is deleted' });
@@ -23,8 +24,7 @@ export class DashboardService {
     this.metrics.event('dashboard.requested', { requestId, userId, timezone: resolved.timezone, timezoneSource: resolved.source });
     const snapshot = await this.snapshots.get(userId, localDate, resolved.timezone, locale, forceRefresh);
     if (snapshot) {
-      const data = snapshot.snapshotData as any;
-      data.meta.cache = { hit: true, expiresAt: snapshot.expiresAt.toISOString() };
+      const data = this.withSnapshotMetadata(snapshot.snapshotData, snapshot.version, true, snapshot.expiresAt);
       this.metrics.event('dashboard.snapshot.hit', { requestId, userId });
       return data;
     }
@@ -32,10 +32,23 @@ export class DashboardService {
     const data = await this.aggregation.aggregate(userId, resolved.timezone, locale);
     if (!data) throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User was not found' });
     const saved = await this.snapshots.save(userId, localDate, resolved.timezone, locale, data);
-    data.meta.snapshotVersion = saved.version;
-    data.meta.cache.expiresAt = saved.expiresAt.toISOString();
-    await this.dailyState.save(userId, localDate, resolved.timezone, data.today.state as any, data.primaryAction.type as any, { activeWorkoutId: data.primaryAction.type === 'RESUME_WORKOUT' ? data.primaryAction.workoutId ?? undefined : undefined, plannedWorkoutId: data.primaryAction.type === 'START_WORKOUT' ? data.primaryAction.workoutId ?? undefined : undefined, activeProgramId: data.activeProgram?.id }, { completed: data.today.completedWorkoutCount, planned: data.today.plannedWorkoutCount });
+    const response = this.withSnapshotMetadata(data, saved.version, false, saved.expiresAt);
     this.metrics.event('dashboard.generated', { requestId, userId, primaryActionType: data.primaryAction.type, cacheHit: false, durationMs: Date.now() - started });
+    return response;
+  }
+
+  async getForAdmin(actorUserId: string, targetUserId: string, timezoneHeader: string | undefined, localeHeader: string | undefined, requestId: string, reason: string, ipHash?: string) {
+    await this.prisma.auditLog.create({ data: { actorUserId, targetUserId, action: 'ADMIN_DASHBOARD_VIEW', entityType: 'USER_DASHBOARD', entityId: targetUserId, requestId, ipHash, metadata: { reason } } });
+    return this.get(targetUserId, timezoneHeader, localeHeader, false, requestId);
+  }
+
+  private withSnapshotMetadata(snapshotData: unknown, version: number, hit: boolean, expiresAt: Date) {
+    const data = structuredClone(snapshotData) as { meta?: Record<string, unknown> };
+    data.meta = {
+      ...data.meta,
+      snapshotVersion: version,
+      cache: { hit, expiresAt: expiresAt.toISOString() },
+    };
     return data;
   }
 }

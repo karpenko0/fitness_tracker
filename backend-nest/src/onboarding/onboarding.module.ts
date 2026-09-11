@@ -6,8 +6,10 @@ import { OnboardingValidationService } from './onboarding-validation.service';
 import { StarterProgramRecommendationService } from './starter-program-recommendation.service';
 import { OnboardingAnalyticsService } from './onboarding-analytics.service';
 import { OnboardingOutboxPublisher } from './outbox.publisher';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
+  imports: [DashboardModule],
   controllers: [OnboardingController],
   providers: [OnboardingService, OnboardingDraftService, OnboardingValidationService, StarterProgramRecommendationService, OnboardingAnalyticsService, OnboardingOutboxPublisher],
 })

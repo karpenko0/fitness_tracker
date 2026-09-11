@@ -46,6 +46,10 @@ export class UserService {
       },
     });
 
+    if (this.prisma.outboxEvent) {
+      await this.prisma.outboxEvent.create({ data: { userId, type: 'profile.updated', payload: { profileId: profile.id } } });
+    }
+
     await this.prisma.auditLog.create({
       data: {
         actorUserId: userId,
