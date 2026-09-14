@@ -137,12 +137,14 @@ enum AssignmentStatus {
   ARCHIVED
 }
 enum WorkoutStatus {
+  DRAFT
   PLANNED
   IN_PROGRESS
   PAUSED
   COMPLETED
   MISSED
   CANCELLED
+  ABANDONED
 }
 
 enum DashboardSnapshotStatus {
@@ -170,6 +172,9 @@ enum DashboardPrimaryActionType {
   REST_DAY
 }
 enum WorkoutSource {
+  PROGRAM
+  TEMPLATE
+  MANUAL
   ONBOARDING
   USER
   SYSTEM
@@ -221,10 +226,63 @@ model StarterProgram {
   firstWorkoutTitle String                  @default("Тренировка 1")
   isFallback        Boolean                 @default(false)
   assignments       UserProgramAssignment[]
+  workouts         ProgramWorkout[]
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
   @@index([status, active])
+}
+
+model ProgramWorkout {
+  id        String           @id @default(uuid())
+  program   StarterProgram   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId String
+  title     String
+  position  Int
+  exercises ProgramWorkoutExercise[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([programId, position])
+}
+
+model ExerciseCatalogItem {
+  id           String   @id @default(uuid())
+  title        String
+  muscleGroup  String
+  movementType String?
+  equipment    String?
+  difficulty   String?
+  techniqueUrl String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  programExercises ProgramWorkoutExercise[]
+}
+
+model ProgramWorkoutExercise {
+  id               String              @id @default(uuid())
+  programWorkout   ProgramWorkout      @relation(fields: [programWorkoutId], references: [id], onDelete: Cascade)
+  programWorkoutId String
+  exercise         ExerciseCatalogItem @relation(fields: [exerciseId], references: [id])
+  exerciseId       String
+  position         Int
+  plannedSets      Json                @default("[]")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([programWorkoutId, position])
+}
+
+model WorkoutTemplate {
+  id        String   @id @default(uuid())
+  userId    String?
+  title     String
+  locked    Boolean  @default(false)
+  exercises Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
 }
 
 model UserProgramAssignment {
@@ -248,23 +306,31 @@ model Workout {
   id                  String                @id @default(uuid())
   user                User                  @relation(fields: [userId], references: [id])
   userId              String
-  programAssignment   UserProgramAssignment @relation(fields: [programAssignmentId], references: [id])
-  programAssignmentId String
+  programAssignment   UserProgramAssignment? @relation(fields: [programAssignmentId], references: [id])
+  programAssignmentId String?
   status              WorkoutStatus         @default(PLANNED)
   source              WorkoutSource
   scheduledFor        DateTime
   title               String
   startedAt           DateTime?
   completedAt         DateTime?
+  cancelledAt         DateTime?
+  durationSeconds     Int?
+  totalVolumeKg       Decimal?              @db.Decimal(12, 2)
+  templateId          String?
+  pausedDurationSeconds Int                 @default(0)
   estimatedDurationMinutes Int?
   version             Int                   @default(1)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   sessions            WorkoutSession[]
   exercises           WorkoutExercise[]
+  restTimer           WorkoutRestTimer?
+  replacements        WorkoutExerciseReplacement[]
 
   @@unique([programAssignmentId, scheduledFor])
   @@index([userId, scheduledFor])
+  @@index([userId, status, startedAt])
 }
 
 enum WorkoutSessionStatus {
@@ -279,6 +345,36 @@ enum WorkoutExerciseKind {
   CARDIO
   MOBILITY
   OTHER
+}
+
+enum WorkoutExerciseStatus {
+  ACTIVE
+  REPLACED
+  REMOVED
+}
+
+enum WorkoutSetType {
+  WARMUP
+  WORKING
+  DROP_SET
+  FAILURE
+  CUSTOM
+}
+
+enum WorkoutSkipReason {
+  NO_TIME
+  TOO_HEAVY
+  PAIN_OR_DISCOMFORT
+  EQUIPMENT_UNAVAILABLE
+  USER_DECISION
+  OTHER
+}
+
+enum WorkoutRestTimerStatus {
+  RUNNING
+  PAUSED
+  SKIPPED
+  COMPLETED
 }
 
 enum WorkoutSetStatus {
@@ -309,6 +405,15 @@ model WorkoutExercise {
   workoutId         String
   title             String
   kind              WorkoutExerciseKind @default(STRENGTH)
+  status            WorkoutExerciseStatus @default(ACTIVE)
+  muscleGroup       String?
+  equipment         String?
+  catalogExerciseId String?
+  techniqueUrl      String?
+  recommendedWeightKg Decimal?           @db.Decimal(7, 2)
+  lastPerformance   Json?
+  replacedByExerciseId String?
+  note              String?              @db.VarChar(500)
   position          Int
   completedAt       DateTime?
   version           Int                  @default(1)
@@ -320,12 +425,32 @@ model WorkoutExercise {
   @@index([workoutId, position])
 }
 
+model WorkoutExerciseReplacement {
+  id                    String          @id @default(uuid())
+  workout               Workout         @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId             String
+  originalExerciseId    String
+  replacementExerciseId String
+  createdAt             DateTime        @default(now())
+  @@index([workoutId, originalExerciseId])
+}
+
 model WorkoutSet {
   id                String           @id @default(uuid())
   exercise          WorkoutExercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   exerciseId        String
   position          Int
+  setType           WorkoutSetType   @default(WORKING)
   status            WorkoutSetStatus @default(PLANNED)
+  plannedReps       Int?
+  plannedWeightKg   Decimal?         @db.Decimal(7, 2)
+  actualReps        Int?
+  actualWeightKg    Decimal?         @db.Decimal(7, 2)
+  rpe               Decimal?         @db.Decimal(3, 1)
+  rir               Int?
+  restSeconds       Int               @default(0)
+  skipReason        WorkoutSkipReason?
+  note              String?          @db.VarChar(500)
   reps              Int?
   weightKg          Decimal?         @db.Decimal(7, 2)
   durationSeconds   Int?
@@ -336,6 +461,18 @@ model WorkoutSet {
 
   @@unique([exerciseId, position])
   @@index([exerciseId, status])
+}
+
+model WorkoutRestTimer {
+  id          String                 @id @default(uuid())
+  workout     Workout                @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId   String                 @unique
+  status      WorkoutRestTimerStatus @default(RUNNING)
+  durationSeconds Int
+  endsAt      DateTime?
+  pausedRemainingSeconds Int?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 }
 
 model Measurement {

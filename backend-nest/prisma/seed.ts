@@ -48,6 +48,16 @@ async function main() {
     await prisma.starterProgram.upsert({ where: { id: program.id }, update: { ...program, status: 'PUBLISHED', active: true }, create: { ...program, status: 'PUBLISHED', active: true } });
   }
 
+  const exercises = [
+    { id: '10000000-0000-4000-8000-000000000001', title: 'Присед со штангой', muscleGroup: 'Ноги', movementType: 'SQUAT', equipment: 'BARBELL', difficulty: 'INTERMEDIATE' },
+    { id: '10000000-0000-4000-8000-000000000002', title: 'Жим лежа', muscleGroup: 'Грудь', movementType: 'PUSH', equipment: 'BARBELL', difficulty: 'BEGINNER' },
+    { id: '10000000-0000-4000-8000-000000000003', title: 'Тяга гантели в наклоне', muscleGroup: 'Спина', movementType: 'PULL', equipment: 'DUMBBELL', difficulty: 'BEGINNER' },
+  ];
+  for (const exercise of exercises) await prisma.exerciseCatalogItem.upsert({ where: { id: exercise.id }, update: exercise, create: exercise });
+
+  const strengthProgramWorkout = await prisma.programWorkout.upsert({ where: { programId_position: { programId: programs[2].id, position: 1 } }, update: { title: programs[2].firstWorkoutTitle }, create: { programId: programs[2].id, title: programs[2].firstWorkoutTitle, position: 1 } });
+  await prisma.programWorkoutExercise.upsert({ where: { programWorkoutId_position: { programWorkoutId: strengthProgramWorkout.id, position: 1 } }, update: { exerciseId: exercises[1].id, plannedSets: [{ reps: 8, weightKg: 60, restSeconds: 120 }, { reps: 8, weightKg: 60, restSeconds: 120 }] }, create: { programWorkoutId: strengthProgramWorkout.id, exerciseId: exercises[1].id, position: 1, plannedSets: [{ reps: 8, weightKg: 60, restSeconds: 120 }, { reps: 8, weightKg: 60, restSeconds: 120 }] } });
+
   await prisma.$disconnect();
 }
 

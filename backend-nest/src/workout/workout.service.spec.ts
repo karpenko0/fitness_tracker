@@ -33,4 +33,11 @@ describe('WorkoutService lifecycle', () => {
     expect(prisma.workout.findFirst).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
+
+  it('rejects idempotency-key reuse for a different transition', async () => {
+    const prisma = base();
+    prisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(prisma));
+    prisma.idempotencyKey.findUnique.mockResolvedValue({ requestHash: 'other', responseBody: {} });
+    await expect(new WorkoutService(prisma as any).transition('u', 'w', 'start', 'key')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'IDEMPOTENCY_KEY_REUSED' }) });
+  });
 });

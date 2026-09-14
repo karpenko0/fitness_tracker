@@ -21,6 +21,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/start/:workoutId" element={<WorkoutStart />} />
+          <Route path="/workouts/:workoutId" element={<WorkoutStart />} />
         </Routes>
       </main>
     </BrowserRouter>
