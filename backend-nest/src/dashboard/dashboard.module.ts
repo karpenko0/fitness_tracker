@@ -14,5 +14,5 @@ import { AdminDashboardController } from './admin-dashboard.controller';
 import { ForceRefreshLimitService } from './force-refresh-limit.service';
 import { DashboardRedisService } from './redis.service';
 
-@Module({ controllers: [DashboardController, AdminDashboardController], providers: [DashboardService, DashboardAggregationService, DashboardSnapshotService, DashboardTimezoneService, DashboardPriorityService, DashboardMetricsService, DashboardAuditService, DashboardInvalidationService, UserDailyStateService, DashboardSnapshotWorker, ForceRefreshLimitService, DashboardRedisService], exports: [DashboardInvalidationService] })
+@Module({ controllers: [DashboardController, AdminDashboardController], providers: [DashboardService, DashboardAggregationService, DashboardSnapshotService, DashboardTimezoneService, DashboardPriorityService, DashboardMetricsService, DashboardAuditService, DashboardInvalidationService, UserDailyStateService, DashboardSnapshotWorker, ForceRefreshLimitService, DashboardRedisService], exports: [DashboardInvalidationService, DashboardRedisService] })
 export class DashboardModule {}

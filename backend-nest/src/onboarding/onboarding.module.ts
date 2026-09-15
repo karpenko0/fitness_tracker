@@ -7,9 +7,10 @@ import { StarterProgramRecommendationService } from './starter-program-recommend
 import { OnboardingAnalyticsService } from './onboarding-analytics.service';
 import { OnboardingOutboxPublisher } from './outbox.publisher';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { ProgressionModule } from '../progression/progression.module';
 
 @Module({
-  imports: [DashboardModule],
+  imports: [DashboardModule, ProgressionModule],
   controllers: [OnboardingController],
   providers: [OnboardingService, OnboardingDraftService, OnboardingValidationService, StarterProgramRecommendationService, OnboardingAnalyticsService, OnboardingOutboxPublisher],
 })

@@ -177,7 +177,7 @@ export class WorkoutService {
   }
 
   async complete(userId: string, workoutId: string, body: any, key?: string) {
-    return this.idempotent(userId, key, { workoutId, body }, async tx => {
+    const response = await this.idempotent(userId, key, { workoutId, body }, async tx => {
       const workout = await this.assertMutable(tx, userId, workoutId, body.workoutVersion);
       const incomplete = workout.exercises.flatMap((exercise: any) => exercise.sets).filter((set: any) => set.status === WorkoutSetStatus.PLANNED);
       if (incomplete.length && !body.completeWithIncompleteSets) throw new UnprocessableEntityException({ code: 'WORKOUT_HAS_INCOMPLETE_SETS', message: 'Workout has incomplete sets' });
@@ -188,11 +188,13 @@ export class WorkoutService {
       await tx.workout.update({ where: { id: workoutId }, data: { status: WorkoutStatus.COMPLETED, completedAt: now, durationSeconds, totalVolumeKg: volume, version: { increment: 1 } } });
       await tx.workoutSession.updateMany({ where: { workoutId }, data: { status: WorkoutSessionStatus.COMPLETED, completedAt: now, durationSeconds, version: { increment: 1 } } });
       await tx.dashboardSnapshot.updateMany({ where: { userId, status: 'ACTIVE' }, data: { status: 'INVALIDATED', invalidatedAt: now } });
+      await tx.outboxEvent.create({ data: { userId, type: 'workout.completed', payload: { workoutId } } });
       await this.audit(tx, userId, 'WORKOUT_COMPLETED', workoutId);
       const completedSets = sets.filter((set: any) => set.status === WorkoutSetStatus.COMPLETED).length;
       const skippedSets = sets.filter((set: any) => set.status === WorkoutSetStatus.SKIPPED).length;
-      return { data: { id: workoutId, status: WorkoutStatus.COMPLETED, startedAt: workout.startedAt, completedAt: now, durationMinutes: Math.round(durationSeconds / 60), summary: { exerciseCount: workout.exercises.length, completedSets, skippedSets, totalVolumeKg: volume, personalRecords: [] }, nextAction: { type: 'GO_TO_DASHBOARD', deepLink: '/' } } };
+      return { data: { id: workoutId, status: WorkoutStatus.COMPLETED, startedAt: workout.startedAt, completedAt: now, durationMinutes: Math.round(durationSeconds / 60), summary: { exerciseCount: workout.exercises.length, completedSets, skippedSets, totalVolumeKg: volume, personalRecords: [], calculationStatus: 'PENDING' }, nextAction: { type: 'GO_TO_DASHBOARD', deepLink: '/' } } };
     });
+    return response;
   }
 
   async cancel(userId: string, workoutId: string, body: any, key?: string) {

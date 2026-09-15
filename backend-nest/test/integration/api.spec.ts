@@ -32,6 +32,15 @@ describe('API integration', () => {
     auditLog: {
       create: jest.fn(),
     },
+    exerciseCatalogItem: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    workout: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    workoutCalculation: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     user: {
       findUnique: jest.fn().mockResolvedValue({
         id: 'user-1',
@@ -141,5 +150,36 @@ describe('API integration', () => {
     const limitedResponses = responses.filter((response) => response.status === 429);
     expect(limitedResponses).not.toHaveLength(0);
      expect(limitedResponses[0].body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+  });
+
+  it('requires a bearer token for progression endpoints', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/progression/exercises/01900000-0000-7000-8000-000000000001')
+      .expect(401)
+      .expect(({ body }) => expect(body.error.code).toBe('UNAUTHORIZED'));
+  });
+
+  it('scopes progression reads to the authenticated user and returns EXERCISE_NOT_FOUND for unknown catalog ids', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/progression/exercises/01900000-0000-7000-8000-000000000001')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404)
+      .expect(({ body }) => expect(body.error.code).toBe('EXERCISE_NOT_FOUND'));
+  });
+
+  it('forbids USER from admin progression and SUPER_ADMIN-only recalculation', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/progression/users/01900000-0000-7000-8000-000000000002/exercises/01900000-0000-7000-8000-000000000001')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(403)
+      .expect(({ body }) => expect(body.error.code).toBe('FORBIDDEN'));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/progression/workouts/01900000-0000-7000-8000-000000000003/recalculate')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', '01900000-0000-7000-8000-000000000099')
+      .send({ algorithmVersion: 'PROGRESSION_V1', reason: 'DATA_CORRECTION' })
+      .expect(403)
+      .expect(({ body }) => expect(body.error.code).toBe('FORBIDDEN'));
   });
 });

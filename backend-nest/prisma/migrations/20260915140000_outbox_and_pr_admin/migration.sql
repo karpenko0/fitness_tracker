@@ -1,0 +1,10 @@
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "attempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "lockedAt" TIMESTAMPTZ;
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "lockedBy" VARCHAR(64);
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "nextAttemptAt" TIMESTAMPTZ;
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "lastError" VARCHAR(500);
+ALTER TABLE "OutboxEvent" ADD COLUMN IF NOT EXISTS "deadLetteredAt" TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS "OutboxEvent_deadLetteredAt_nextAttemptAt_lockedAt_idx" ON "OutboxEvent"("deadLetteredAt", "nextAttemptAt", "lockedAt");
+
+ALTER TABLE "PersonalRecord" ADD COLUMN IF NOT EXISTS "revokedAt" TIMESTAMPTZ;
+ALTER TABLE "PersonalRecord" ADD COLUMN IF NOT EXISTS "revokedReason" VARCHAR(128);

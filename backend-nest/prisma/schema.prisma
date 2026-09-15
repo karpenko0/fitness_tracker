@@ -73,6 +73,10 @@ model User {
   measurements          Measurement[]
   idempotencyKeys       IdempotencyKey[]
   outboxEvents           OutboxEvent[]
+  exercisePerformances   ExercisePerformance[]
+  personalRecords        PersonalRecord[]
+  progressionRecommendations ExerciseProgressionRecommendation[]
+  workoutCalculations    WorkoutCalculation[]
 }
 
 model UserProfile {
@@ -254,6 +258,8 @@ model ExerciseCatalogItem {
   equipment    String?
   difficulty   String?
   techniqueUrl String?
+  bodyweightLoadFactor Decimal? @db.Decimal(3, 2)
+  weightIncrementKg Decimal? @db.Decimal(7, 2)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -327,6 +333,9 @@ model Workout {
   exercises           WorkoutExercise[]
   restTimer           WorkoutRestTimer?
   replacements        WorkoutExerciseReplacement[]
+  calculation         WorkoutCalculation?
+  exercisePerformances ExercisePerformance[]
+  personalRecords     PersonalRecord[]
 
   @@unique([programAssignmentId, scheduledFor])
   @@index([userId, scheduledFor])
@@ -458,6 +467,7 @@ model WorkoutSet {
   version           Int              @default(1)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  personalRecords   PersonalRecord[]
 
   @@unique([exerciseId, position])
   @@index([exerciseId, status])
@@ -569,15 +579,22 @@ model IdempotencyKey {
 }
 
 model OutboxEvent {
-  id          String    @id @default(uuid())
-  user        User?     @relation(fields: [userId], references: [id])
-  userId      String?
-  type        String
-  payload     Json
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
+  id             String    @id @default(uuid())
+  user           User?     @relation(fields: [userId], references: [id])
+  userId         String?
+  type           String
+  payload        Json
+  publishedAt    DateTime?
+  attempts       Int       @default(0)
+  lockedAt       DateTime?
+  lockedBy       String?   @db.VarChar(64)
+  nextAttemptAt  DateTime?
+  lastError      String?   @db.VarChar(500)
+  deadLetteredAt DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([publishedAt, createdAt])
+  @@index([deadLetteredAt, nextAttemptAt, lockedAt])
 }
 
 model Role {
@@ -634,4 +651,130 @@ model AuditLog {
 
   actorUser     User?     @relation("actorUser", fields: [actorUserId], references: [id])
   targetUser    User?     @relation("targetUser", fields: [targetUserId], references: [id])
+}
+
+enum PersonalRecordType {
+  MAX_WEIGHT
+  MAX_REPS
+  ESTIMATED_1RM
+  MAX_EXERCISE_VOLUME
+  MAX_WORKOUT_VOLUME
+}
+
+enum PersonalRecordUnit {
+  KG
+  REPS
+  KG_VOLUME
+}
+
+enum ProgressionConfidence {
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
+enum ProgressionReasonCode {
+  PROGRESSIVE_OVERLOAD
+  MAINTAIN_LOAD
+  REDUCE_LOAD
+  PAIN_OR_DISCOMFORT
+  PLAN_VALUE
+  INSUFFICIENT_DATA
+}
+
+model ExercisePerformance {
+  id                    String   @id @default(uuid())
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  workout               Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId             String
+  exerciseId            String
+  performedAt           DateTime
+  totalVolumeKg         Decimal? @db.Decimal(12, 2)
+  maxWeightKg           Decimal? @db.Decimal(7, 2)
+  maxReps               Int?
+  bestEstimated1RmKg    Decimal? @db.Decimal(8, 1)
+  completedSetsCount    Int      @db.SmallInt
+  skippedSetsCount      Int      @db.SmallInt
+  calculationVersion    String   @db.VarChar(32)
+  formulaVersion        String   @db.VarChar(32)
+  createdAt             DateTime @default(now())
+
+  @@unique([userId, workoutId, exerciseId])
+  @@index([userId, exerciseId, performedAt(sort: Desc)])
+}
+
+model PersonalRecord {
+  id                    String             @id @default(uuid())
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  exerciseId            String?
+  recordType            PersonalRecordType
+  value                 Decimal            @db.Decimal(12, 2)
+  unit                  PersonalRecordUnit
+  sourceWorkout         Workout            @relation(fields: [sourceWorkoutId], references: [id], onDelete: Restrict)
+  sourceWorkoutId       String
+  sourceSet             WorkoutSet?        @relation(fields: [sourceSetId], references: [id], onDelete: SetNull)
+  sourceSetId           String?
+  previousValue         Decimal?           @db.Decimal(12, 2)
+  achievedAt            DateTime
+  calculationVersion    String             @db.VarChar(32)
+  revokedAt             DateTime?
+  revokedReason         String?            @db.VarChar(128)
+  createdAt             DateTime           @default(now())
+
+  @@unique([sourceWorkoutId, exerciseId, recordType])
+  @@index([userId, exerciseId, recordType])
+}
+
+model ExerciseProgressionRecommendation {
+  id                    String                @id @default(uuid())
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  exerciseId            String
+  recommendedWeightKg   Decimal?              @db.Decimal(7, 2)
+  targetRepsMin         Int?                  @db.SmallInt
+  targetRepsMax         Int?                  @db.SmallInt
+  targetRpe             Decimal?              @db.Decimal(3, 1)
+  confidence            ProgressionConfidence
+  reasonCode            ProgressionReasonCode
+  basedOnWorkoutId      String?
+  algorithmVersion      String                @db.VarChar(32)
+  validUntil            DateTime
+  version               Int                   @default(1)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@unique([userId, exerciseId, algorithmVersion])
+  @@index([userId, exerciseId])
+}
+
+model WorkoutCalculation {
+  id                    String   @id @default(uuid())
+  workout               Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  workoutId             String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+  totalVolumeKg         Decimal? @db.Decimal(12, 2)
+  completedSetsCount    Int      @db.SmallInt
+  skippedSetsCount      Int      @db.SmallInt
+  calculationVersion    String   @db.VarChar(32)
+  formulaVersion        String   @db.VarChar(32)
+  calculatedAt          DateTime
+  version               Int      @default(1)
+
+  @@index([workoutId])
+}
+
+model ProgressionAlgorithmConfig {
+  id                    String   @id @default(uuid())
+  algorithmVersion      String   @unique @db.VarChar(32)
+  formulaVersion        String   @db.VarChar(32)
+  increasePercent       Decimal  @db.Decimal(5, 2) @default(5)
+  decreasePercent       Decimal  @db.Decimal(5, 2) @default(10)
+  maxIncreasePercent    Decimal  @db.Decimal(5, 2) @default(10)
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
