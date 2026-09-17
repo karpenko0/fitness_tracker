@@ -9,6 +9,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { WorkoutModule } from './workout/workout.module';
 import { ProgressionModule } from './progression/progression.module';
+import { ProgramModule } from './program/program.module';
 import { ProgressionApiMetricsInterceptor } from './progression/progression-audit.service';
 
 @Module({
@@ -26,6 +27,7 @@ import { ProgressionApiMetricsInterceptor } from './progression/progression-audi
     OnboardingModule,
     DashboardModule,
     WorkoutModule,
+    ProgramModule,
     ProgressionModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: ProgressionApiMetricsInterceptor }],

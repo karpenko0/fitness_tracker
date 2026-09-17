@@ -66,6 +66,9 @@ model User {
   auditTargets          AuditLog[]    @relation("targetUser")
   onboardingDrafts      OnboardingDraft[]
   programAssignments    UserProgramAssignment[]
+  ownedPrograms         StarterProgram[] @relation("ProgramOwner")
+  customExercises       ExerciseCatalogItem[] @relation("CustomExerciseOwner")
+  entitlement           SubscriptionEntitlement?
   workouts              Workout[]
   dashboardSnapshots    DashboardSnapshot[]
   dailyStates           UserDailyState[]
@@ -94,6 +97,7 @@ model UserProfile {
   preferredWorkoutDuration Int?
   equipment              Json              @default("[]")
   limitations            String?
+  limitationTags         Json              @default("[]")
   trainingPreferences    Json              @default("[]")
   nutritionPlanNeeded    Boolean           @default(false)
   notificationDays       Json              @default("[]")
@@ -126,7 +130,31 @@ enum OnboardingStep {
 enum ProgramStatus {
   DRAFT
   PUBLISHED
+  ACTIVE
+  PAUSED
+  COMPLETED
   ARCHIVED
+  UNPUBLISHED
+}
+
+enum ProgramType {
+  SYSTEM
+  USER_CUSTOM
+  TRAINER_ASSIGNED
+  AUTO_ASSIGNED
+  TEMPLATE
+}
+
+enum ExerciseType {
+  STRENGTH
+  BODYWEIGHT
+  MOBILITY
+  CARDIO
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
 }
 enum AssignmentSource {
   ONBOARDING
@@ -216,68 +244,201 @@ model OnboardingDraft {
 }
 
 model StarterProgram {
-  id                String                  @id @default(uuid())
-  title             String
-  status            ProgramStatus           @default(DRAFT)
-  active            Boolean                 @default(true)
-  goals             Json                    @default("[]")
-  levels            Json                    @default("[]")
-  locations         Json                    @default("[]")
-  workoutsPerWeek   Int
-  durationMinutes   Int
-  requiredEquipment Json                    @default("[]")
-  contraindications Json                    @default("[]")
-  firstWorkoutTitle String                  @default("Тренировка 1")
-  isFallback        Boolean                 @default(false)
-  assignments       UserProgramAssignment[]
-  workouts         ProgramWorkout[]
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  id                             String                  @id @default(uuid())
+  ownerId                        String?
+  owner                          User?                   @relation("ProgramOwner", fields: [ownerId], references: [id])
+  type                           ProgramType             @default(SYSTEM)
+  title                          String
+  description                    String                  @default("")
+  status                         ProgramStatus           @default(DRAFT)
+  active                         Boolean                 @default(true)
+  goal                           FitnessGoal?
+  level                          ExperienceLevel?
+  location                       TrainingLocation?
+  goals                          Json                    @default("[]")
+  levels                         Json                    @default("[]")
+  locations                      Json                    @default("[]")
+  durationWeeks                  Int                     @default(4)
+  workoutsPerWeek                Int
+  estimatedWorkoutDurationMinutes Int?
+  durationMinutes                Int
+  requiredEquipment              Json                    @default("[]")
+  coverUrl                       String?
+  isProOnly                      Boolean                 @default(false)
+  version                        Int                     @default(1)
+  contraindications              Json                    @default("[]")
+  firstWorkoutTitle              String                  @default("Тренировка 1")
+  isFallback                     Boolean                 @default(false)
+  assignments                    UserProgramAssignment[]
+  workouts                       ProgramWorkout[]
+  createdAt                      DateTime                @default(now())
+  updatedAt                      DateTime                @updatedAt
 
   @@index([status, active])
+  @@index([ownerId, status, type])
 }
 
 model ProgramWorkout {
-  id        String           @id @default(uuid())
-  program   StarterProgram   @relation(fields: [programId], references: [id], onDelete: Cascade)
-  programId String
-  title     String
-  position  Int
-  exercises ProgramWorkoutExercise[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id                       String                   @id @default(uuid())
+  program                  StarterProgram           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId                String
+  title                    String
+  description              String?
+  focus                    String?
+  scheduledWeekday         Int?
+  estimatedDurationMinutes Int                      @default(60)
+  isRestDay                Boolean                  @default(false)
+  position                 Int
+  exercises                ProgramWorkoutExercise[]
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
   @@unique([programId, position])
+  @@index([programId, position])
 }
 
 model ExerciseCatalogItem {
-  id           String   @id @default(uuid())
-  title        String
-  muscleGroup  String
-  movementType String?
-  equipment    String?
-  difficulty   String?
-  techniqueUrl String?
+  id                   String   @id @default(uuid())
+  ownerId              String?
+  owner                User?    @relation("CustomExerciseOwner", fields: [ownerId], references: [id])
+  slug                 String?  @unique
+  title                String
+  description          String   @default("")
+  instructions         Json     @default("[]")
+  exerciseType         ExerciseType @default(STRENGTH)
+  muscleGroup          String
+  movementType         String?
+  equipment            String?
+  equipmentList        Json     @default("[]")
+  primaryMuscles       Json     @default("[]")
+  secondaryMuscles     Json     @default("[]")
+  difficulty           String?
+  techniqueUrl         String?
+  safetyNotes          String?
+  media                Json     @default("[]")
+  alternativeExerciseIds Json   @default("[]")
+  contraindications    Json     @default("[]")
   bodyweightLoadFactor Decimal? @db.Decimal(3, 2)
-  weightIncrementKg Decimal? @db.Decimal(7, 2)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  programExercises ProgramWorkoutExercise[]
+  weightIncrementKg    Decimal? @db.Decimal(7, 2)
+  isSystem             Boolean  @default(true)
+  isProOnly            Boolean  @default(false)
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  programExercises     ProgramWorkoutExercise[]
+  sourceAlternatives   ExerciseAlternative[] @relation("ExerciseSource")
+  targetAlternatives   ExerciseAlternative[] @relation("ExerciseTarget")
+  mediaItems           ExerciseMedia[]
+  muscleLinks          ExerciseMuscle[]
+  equipmentLinks       ExerciseEquipment[]
+  contraindicationLinks ExerciseContraindication[]
+
+  @@index([active, difficulty])
+  @@index([ownerId, isSystem])
 }
 
 model ProgramWorkoutExercise {
-  id               String              @id @default(uuid())
-  programWorkout   ProgramWorkout      @relation(fields: [programWorkoutId], references: [id], onDelete: Cascade)
-  programWorkoutId String
-  exercise         ExerciseCatalogItem @relation(fields: [exerciseId], references: [id])
-  exerciseId       String
-  position         Int
-  plannedSets      Json                @default("[]")
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                     String              @id @default(uuid())
+  programWorkout         ProgramWorkout      @relation(fields: [programWorkoutId], references: [id], onDelete: Cascade)
+  programWorkoutId       String
+  exercise               ExerciseCatalogItem @relation(fields: [exerciseId], references: [id])
+  exerciseId             String
+  position               Int
+  plannedSetsCount       Int                 @default(3)
+  plannedRepsMin         Int                 @default(8)
+  plannedRepsMax         Int                 @default(12)
+  plannedWeightKg        Decimal?            @db.Decimal(7, 2)
+  targetRpe              Decimal?            @db.Decimal(3, 1)
+  restSeconds            Int                 @default(90)
+  note                   String?             @db.VarChar(500)
+  allowReplacement       Boolean             @default(true)
+  alternativeExerciseIds Json                @default("[]")
+  isOptional             Boolean             @default(false)
+  plannedSets            Json                @default("[]")
+  sets                   ProgramExerciseSet[]
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   @@unique([programWorkoutId, position])
+  @@index([programWorkoutId, position])
+}
+
+model ProgramExerciseSet {
+  id                 String                 @id @default(uuid())
+  programExercise    ProgramWorkoutExercise @relation(fields: [programExerciseId], references: [id], onDelete: Cascade)
+  programExerciseId  String
+  setNumber          Int
+  setType            WorkoutSetType         @default(WORKING)
+  plannedWeightKg    Decimal?               @db.Decimal(7, 2)
+  plannedRepsMin     Int                    @default(8)
+  plannedRepsMax     Int                    @default(12)
+  targetRpe          Decimal?               @db.Decimal(3, 1)
+  restSeconds        Int?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@unique([programExerciseId, setNumber])
+}
+
+model ExerciseMuscle {
+  id         String              @id @default(uuid())
+  exercise   ExerciseCatalogItem @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId String
+  muscle     String
+  isPrimary  Boolean             @default(true)
+
+  @@unique([exerciseId, muscle, isPrimary])
+}
+
+model ExerciseEquipment {
+  id         String              @id @default(uuid())
+  exercise   ExerciseCatalogItem @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId String
+  equipment  String
+
+  @@unique([exerciseId, equipment])
+}
+
+model ExerciseAlternative {
+  id                    String              @id @default(uuid())
+  exercise              ExerciseCatalogItem @relation("ExerciseSource", fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId            String
+  alternative           ExerciseCatalogItem @relation("ExerciseTarget", fields: [alternativeExerciseId], references: [id], onDelete: Cascade)
+  alternativeExerciseId String
+
+  @@unique([exerciseId, alternativeExerciseId])
+}
+
+model ExerciseMedia {
+  id         String              @id @default(uuid())
+  exercise   ExerciseCatalogItem @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId String
+  type       String
+  url        String
+  position   Int                 @default(1)
+}
+
+model ExerciseContraindication {
+  id         String              @id @default(uuid())
+  exercise   ExerciseCatalogItem @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId String
+  tag        String
+
+  @@unique([exerciseId, tag])
+}
+
+model SubscriptionEntitlement {
+  id                     String           @id @default(uuid())
+  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String           @unique
+  plan                   SubscriptionPlan @default(FREE)
+  maxActiveCustomPrograms Int             @default(1)
+  maxDraftCustomPrograms Int              @default(2)
+  maxCustomExercises     Int              @default(10)
+  historyDays            Int              @default(30)
+  extendedStats          Boolean          @default(false)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 }
 
 model WorkoutTemplate {

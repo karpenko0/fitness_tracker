@@ -2,14 +2,15 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import { createHash } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { OnboardingDraftService } from './onboarding-draft.service';
-import { StarterProgramRecommendationService } from './starter-program-recommendation.service';
+import { ProgramMatchingService } from '../program/program-matching.service';
+import { ProgramMetricsService } from '../program/program-metrics.service';
 import { OnboardingValidationService } from './onboarding-validation.service';
 import { OnboardingAnalyticsService } from './onboarding-analytics.service';
 import { CompleteOnboardingDto } from './dto/onboarding.dto';
 
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaClient, private readonly drafts: OnboardingDraftService, private readonly recommendation: StarterProgramRecommendationService, private readonly validation: OnboardingValidationService, private readonly analytics: OnboardingAnalyticsService) {}
+  constructor(private readonly prisma: PrismaClient, private readonly drafts: OnboardingDraftService, private readonly matching: ProgramMatchingService, private readonly metrics: ProgramMetricsService, private readonly validation: OnboardingValidationService, private readonly analytics: OnboardingAnalyticsService) {}
 
   async status(userId: string) {
     const profile = await this.prisma.userProfile.findUnique({ where: { userId }, select: { onboardingCompleted: true } });
@@ -25,7 +26,7 @@ export class OnboardingService {
     const preferences = [['STRENGTH', 'Силовые тренировки', 'Strength'], ['CARDIO', 'Кардио', 'Cardio'], ['MOBILITY', 'Мобильность', 'Mobility'], ['LOW_IMPACT', 'Низкая ударная нагрузка', 'Low impact']];
     return { fitnessGoals: Object.keys(labels).map(code => ({ code, label: labels[code][locale === 'ru' ? 0 : 1] })), equipment: equipment.map(([code, ru, en]) => ({ code, label: locale === 'ru' ? ru : en })), trainingPreferences: preferences.map(([code, ru, en]) => ({ code, label: locale === 'ru' ? ru : en })), workoutDurations: [15, 30, 45, 60, 90] };
   }
-  async preview(userId: string) { const draft = await this.drafts.getOrCreate(userId); const data = this.validation.validateComplete(draft.draftData as Record<string, unknown>); const result = await this.recommendation.recommend(data); this.analytics.event('onboarding.recommendation.previewed', { userId, programId: result.program.id }); return { isReadyForCompletion: true, recommendation: this.programResponse(result.program), warnings: data.fitnessGoal === 'MOBILITY_RECOVERY' ? ['Materials are for general physical activity and do not replace a doctor or rehabilitation specialist.'] : [] }; }
+  async preview(userId: string) { const draft = await this.drafts.getOrCreate(userId); const data = this.validation.validateComplete(draft.draftData as Record<string, unknown>);     const result = await this.matching.recommend({ ...data, limitationTags: this.matching.parseLimitationTags(data.limitations) }); this.analytics.event('onboarding.recommendation.previewed', { userId, programId: result.program.id }); return { isReadyForCompletion: true, recommendation: this.programResponse(result.program), warnings: data.fitnessGoal === 'MOBILITY_RECOVERY' ? ['Materials are for general physical activity and do not replace a doctor or rehabilitation specialist.'] : [] }; }
   async complete(userId: string, dto: CompleteOnboardingDto, key?: string) {
     if (!key) throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Idempotency-Key is required' });
     const hash = createHash('sha256').update(JSON.stringify(dto)).digest('hex');
@@ -53,9 +54,10 @@ export class OnboardingService {
         if (completedKey) return completedKey.responseBody;
         throw new ConflictException({ code: 'ONBOARDING_ALREADY_COMPLETED', message: 'Onboarding has already been completed' });
       }
-      const match = await this.recommendation.recommend(data, tx as any);
-      const profile = await tx.userProfile.upsert({ where: { userId }, create: { userId, ...this.profileData(data), onboardingCompleted: true, onboardingCompletedAt: new Date() }, update: { ...this.profileData(data), onboardingCompleted: true, onboardingCompletedAt: new Date() } });
-      const assignment = await tx.userProgramAssignment.upsert({ where: { userId_programId_source: { userId, programId: match.program.id, source: 'ONBOARDING' } }, create: { userId, programId: match.program.id, source: 'ONBOARDING' }, update: { status: 'ACTIVE' } });
+      const match = await this.matching.recommend({ ...data, limitationTags: this.matching.parseLimitationTags(data.limitations) }, tx as any);
+      const profile = await tx.userProfile.upsert({ where: { userId }, create: { userId, ...this.profileData(data), limitationTags: this.matching.parseLimitationTags(data.limitations), onboardingCompleted: true, onboardingCompletedAt: new Date() }, update: { ...this.profileData(data), limitationTags: this.matching.parseLimitationTags(data.limitations), onboardingCompleted: true, onboardingCompletedAt: new Date() } });
+      await tx.userProgramAssignment.updateMany({ where: { userId, status: 'ACTIVE' }, data: { status: 'ARCHIVED' } });
+      const assignment = await tx.userProgramAssignment.upsert({ where: { userId_programId_source: { userId, programId: match.program.id, source: 'ONBOARDING' } }, create: { userId, programId: match.program.id, source: 'ONBOARDING' }, update: { status: 'ACTIVE', startedAt: new Date() } });
       const workout = await tx.workout.create({ data: { userId, programAssignmentId: assignment.id, source: 'ONBOARDING', status: 'PLANNED', scheduledFor: this.firstWorkoutAt(data), title: match.program.firstWorkoutTitle } });
       const notificationDays = Array.isArray(data.notificationDays) ? data.notificationDays : [];
       if (notificationDays.length && typeof data.notificationTime === 'string' && typeof data.timezone === 'string') {
@@ -67,13 +69,16 @@ export class OnboardingService {
       await tx.auditLog.createMany({ data: [
          { actorUserId: userId, targetUserId: userId, action: 'ONBOARDING_COMPLETED', entityType: 'OnboardingDraft', entityId: currentDraft.id },
         { actorUserId: userId, targetUserId: userId, action: 'STARTER_PROGRAM_ASSIGNED', entityType: 'UserProgramAssignment', entityId: assignment.id },
+        { actorUserId: userId, targetUserId: userId, action: 'program.auto_assigned', entityType: 'PROGRAM', entityId: match.program.id },
         { actorUserId: userId, targetUserId: userId, action: 'ONBOARDING_WORKOUT_CREATED', entityType: 'Workout', entityId: workout.id },
       ] });
-       await tx.outboxEvent.create({ data: { userId, type: 'onboarding.completed', payload: { draftId: currentDraft.id, programId: match.program.id, fallback: match.fallback } } });
+        await tx.outboxEvent.create({ data: { userId, type: 'onboarding.completed', payload: { draftId: currentDraft.id, programId: match.program.id, fallback: match.fallback, matchType: match.matchType } } });
       await tx.idempotencyKey.create({ data: { userId, key, requestHash: hash, responseStatus: 201, responseBody: response, expiresAt: new Date(Date.now() + 86400000) } });
+      this.metrics.increment('program_auto_assigned_total', { match_type: match.matchType });
       return response;
     });
     this.analytics.event('onboarding.completed', { userId });
+    this.metrics.event('program.auto_assigned', { userId });
     return result;
   }
   private profileData(data: any) { const result = { ...data }; if (result.birthDate) result.birthDate = new Date(`${result.birthDate}T00:00:00Z`); return result; }

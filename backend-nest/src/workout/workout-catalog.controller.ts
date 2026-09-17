@@ -12,9 +12,6 @@ import { WorkoutCatalogService } from './workout-catalog.service';
 export class WorkoutCatalogController {
   constructor(private readonly catalog: WorkoutCatalogService) {}
 
-  @Get('exercises')
-  exercises() { return this.catalog.exercises(); }
-
   @Get('workout-templates')
   templates(@GetCurrentUser() user: UserRequest) { return this.catalog.templates(user.userId); }
 
