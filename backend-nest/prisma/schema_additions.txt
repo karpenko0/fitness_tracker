@@ -1,0 +1,137 @@
+// Add new enums for measurement metrics and progress photo poses
+enum MeasurementMetric {
+  WEIGHT
+  NECK
+  CHEST
+  WAIST
+  ABDOMEN
+  HIPS
+  BICEPS_LEFT
+  BICEPS_RIGHT
+  THIGH_LEFT
+  THIGH_RIGHT
+  CALF_LEFT
+  CALF_RIGHT
+}
+
+enum ProgressPhotoPose {
+  FRONT
+  SIDE_LEFT
+  SIDE_RIGHT
+  BACK
+  OTHER
+}
+
+// Update the Measurement model to include timezone and note, and remove the simple weightKg field (we'll move circumferences to a separate model)
+model Measurement {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  measuredAt DateTime @default(now())
+  timezone  String   @db.VarChar(64)
+  note      String?  @db.VarChar(500)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, measuredAt])
+  @@unique([userId, measuredAt, timezone]) // Ensure one measurement per local date (we'll need to convert measuredAt to local date in the service, but for simplicity we use measuredAt and timezone to derive local date)
+}
+
+// New model for measurement values (circumferences and weight)
+model MeasurementValue {
+  id        String   @id @default(uuid())
+  measurement Measurement @relation(fields: [measurementId], references: [id], onDelete: Cascade)
+  measurementId String
+  metric    MeasurementMetric
+  value     Decimal? @db.Decimal(5, 1) // For weight in kg and circumferences in cm, nullable because not all metrics may be present
+
+  @@unique([measurementId, metric])
+}
+
+// Model for progress photos
+model ProgressPhoto {
+  id              String   @id @default(uuid())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  measurement     Measurement? @relation(fields: [measurementId], references: [id])
+  measurementId   String?    // Optional link to a measurement
+  localDate       DateTime @db.Date
+  pose            ProgressPhotoPose
+  storageKey      String   // Private key in object storage
+  previewStorageKey String? // Preview key
+  mimeType        String
+  sizeBytes       BigInt
+  status          ProgressPhotoStatus @default(PENDING) // PENDING, READY, DELETED, FAILED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId, localDate])
+}
+
+// Enum for progress photo status
+enum ProgressPhotoStatus {
+  PENDING
+  READY
+  DELETED
+  FAILED
+}
+
+// Model for progress aggregates (precomputed data for charts)
+model ProgressAggregate {
+  id              String   @id @default(uuid())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  metric          ProgressAggregateMetric // Type of metric (VOLUME, WORKING_WEIGHT, ESTIMATED_1RM, BODY_WEIGHT, etc.)
+  dimensionType   ProgressAggregateDimensionType // GLOBAL, PROGRAM, EXERCISE, MUSCLE_GROUP
+  dimensionId     String?    // ID of program or exercise if applicable
+  dimensionCode   String?    // Code for muscle group (if dimensionType is MUSCLE_GROUP)
+  localDate       DateTime @db.Date
+  groupBy         ProgressAggregateGroupBy // DAY, WEEK, MONTH
+  value           Decimal? @db.Decimal(20, 2) // The aggregated value
+  unit            ProgressAggregateUnit // KG, CM, COUNT, MINUTES
+  calculationVersion String @db.VarChar(32) // Version of the algorithm used
+  calculatedAt    DateTime @default(now())
+
+  @@index([userId, metric, dimensionType, dimensionId, dimensionCode, localDate, groupBy])
+}
+
+// Enums for ProgressAggregate
+enum ProgressAggregateMetric {
+  VOLUME
+  WORKING_WEIGHT
+  ESTIMATED_1RM
+  BODY_WEIGHT
+  NECK
+  CHEST
+  WAIST
+  ABDOMEN
+  HIPS
+  BICEPS_LEFT
+  BICEPS_RIGHT
+  THIGH_LEFT
+  THIGH_RIGHT
+  CALF_LEFT
+  CALF_RIGHT
+}
+
+enum ProgressAggregateDimensionType {
+  GLOBAL
+  PROGRAM
+  EXERCISE
+  MUSCLE_GROUP
+}
+
+enum ProgressAggregateGroupBy {
+  DAY
+  WEEK
+  MONTH
+}
+
+enum ProgressAggregateUnit {
+  KG
+  CM
+  COUNT
+  MINUTES
+}

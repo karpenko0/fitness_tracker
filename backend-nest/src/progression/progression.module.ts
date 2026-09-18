@@ -15,9 +15,10 @@ import { AdminProgressionController } from './admin-progression.controller';
 import { ProgressionConfigController } from './progression-config.controller';
 import { ProgressionConfigService } from './progression-config.service';
 import { ProgressionMetricsController } from './metrics.controller';
+import { ProgressAggregateModule } from '../progress-aggregate/progress-aggregate.module';
 
 @Module({
-  imports: [DashboardModule],
+  imports: [DashboardModule, ProgressAggregateModule],
   controllers: [ProgressionController, AdminProgressionController, ProgressionConfigController, ProgressionMetricsController],
   providers: [ProgressionService, VolumeCalculationService, OneRmCalculationService, PersonalRecordService, LoadRecommendationService, ProgressionMetricsService, ProgressionEventHandler, ProgressionAuditService, ProgressionHistoryService, ProgressionCacheService, ProgressionConfigService, ProgressionApiMetricsInterceptor],
   exports: [ProgressionService, ProgressionEventHandler, ProgressionMetricsService],
