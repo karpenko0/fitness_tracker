@@ -4,6 +4,7 @@ import { CreateHabitDto } from './dto/create-habit.dto';
 import { HabitService } from './habit.service';
 import { HabitTaskService } from './habit-task.service';
 import { HabitLocalDateService } from './habit-local-date.service';
+import { HabitStreakService } from './habit-streak.service';
 import { HabitValidationService } from './habit-validation.service';
 
 describe('HabitService', () => {
@@ -12,6 +13,7 @@ describe('HabitService', () => {
       count: jest.fn().mockResolvedValue(0),
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -25,7 +27,7 @@ describe('HabitService', () => {
       prisma,
       new HabitValidationService(),
       new IdempotencyService(prisma),
-      new HabitTaskService(prisma, new HabitLocalDateService(), new IdempotencyService(prisma)),
+      new HabitTaskService(prisma, new HabitLocalDateService(), new IdempotencyService(prisma), new HabitStreakService(prisma, new HabitLocalDateService())),
     );
 
   const waterDto = (): CreateHabitDto =>

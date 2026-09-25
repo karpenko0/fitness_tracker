@@ -10,6 +10,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { IdempotencyService } from '../common/services/idempotency.service';
 import { TaskProgressDto } from './dto/task-progress.dto';
 import { HabitLocalDateService } from './habit-local-date.service';
+import { HabitStreakService } from './habit-streak.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -33,6 +34,7 @@ export class HabitTaskService {
     @Inject(PrismaClient) private readonly prisma: PrismaClient,
     private readonly localDates: HabitLocalDateService,
     private readonly idempotency: IdempotencyService,
+    private readonly streaks: HabitStreakService,
   ) {}
 
   /**
@@ -179,6 +181,7 @@ export class HabitTaskService {
           version: { increment: 1 },
         },
       });
+      await this.streaks.recalcForHabit(habit.id, tx);
       return this.serializeTask(updated);
     });
   }
@@ -191,6 +194,7 @@ export class HabitTaskService {
         where: { id: task.id },
         data: { status: 'SKIPPED', skippedAt: new Date(), version: { increment: 1 } },
       });
+      await this.streaks.recalcForHabit(task.habitId, tx);
       return this.serializeTask(updated);
     });
   }
@@ -212,6 +216,10 @@ export class HabitTaskService {
       where: { id: { in: overdueIds }, status: 'PENDING' },
       data: { status: 'EXPIRED', expiredAt: now },
     });
+    const affectedHabitIds = [...new Set(pending.filter((task) => overdueIds.includes(task.id)).map((task) => task.habitId))];
+    for (const habitId of affectedHabitIds) {
+      await this.streaks.recalcForHabit(habitId, this.prisma, now);
+    }
     return result.count;
   }
 

@@ -5,6 +5,7 @@ import { HabitService } from './habit.service';
 import { HabitTaskService } from './habit-task.service';
 import { HabitValidationService } from './habit-validation.service';
 import { HabitLocalDateService } from './habit-local-date.service';
+import { HabitStreakService } from './habit-streak.service';
 import { HabitTaskGenerationWorker } from './workers/habit-task-generation.worker';
 import { HabitExpireWorker } from './workers/habit-expire.worker';
 
@@ -15,10 +16,11 @@ import { HabitExpireWorker } from './workers/habit-expire.worker';
     HabitTaskService,
     HabitValidationService,
     HabitLocalDateService,
+    HabitStreakService,
     IdempotencyService,
     HabitTaskGenerationWorker,
     HabitExpireWorker,
   ],
-  exports: [HabitService, HabitTaskService, HabitValidationService, HabitLocalDateService],
+  exports: [HabitService, HabitTaskService, HabitValidationService, HabitLocalDateService, HabitStreakService],
 })
 export class HabitModule {}

@@ -8,6 +8,7 @@ import { HabitController } from '../../src/habit/habit.controller';
 import { HabitService } from '../../src/habit/habit.service';
 import { HabitTaskService } from '../../src/habit/habit-task.service';
 import { HabitLocalDateService } from '../../src/habit/habit-local-date.service';
+import { HabitStreakService } from '../../src/habit/habit-streak.service';
 import { HabitValidationService } from '../../src/habit/habit-validation.service';
 import { IdempotencyService } from '../../src/common/services/idempotency.service';
 import { TransformInterceptor } from '../../src/common/interceptors/transform.interceptor';
@@ -22,6 +23,7 @@ describe('Habits API (integration)', () => {
       count: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -71,7 +73,7 @@ describe('Habits API (integration)', () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [HabitController],
-      providers: [HabitService, HabitTaskService, HabitLocalDateService, HabitValidationService, IdempotencyService, { provide: PrismaClient, useValue: prisma }],
+      providers: [HabitService, HabitTaskService, HabitStreakService, HabitLocalDateService, HabitValidationService, IdempotencyService, { provide: PrismaClient, useValue: prisma }],
     })
       .overrideGuard(AuthGuard('jwt'))
       .useValue({

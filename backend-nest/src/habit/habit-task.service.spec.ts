@@ -1,5 +1,6 @@
 import { IdempotencyService } from '../common/services/idempotency.service';
 import { HabitLocalDateService } from './habit-local-date.service';
+import { HabitStreakService } from './habit-streak.service';
 import { HabitTaskService } from './habit-task.service';
 
 describe('HabitTaskService', () => {
@@ -7,7 +8,7 @@ describe('HabitTaskService', () => {
   const now = new Date('2026-09-25T12:00:00Z');
 
   const prisma: any = {
-    habit: { findMany: jest.fn().mockResolvedValue([]) },
+    habit: { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
     habitTask: {
       upsert: jest.fn(),
       findFirst: jest.fn().mockResolvedValue(null),
@@ -20,7 +21,13 @@ describe('HabitTaskService', () => {
     $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma)),
   };
 
-  const service = () => new HabitTaskService(prisma, new HabitLocalDateService(), new IdempotencyService(prisma));
+  const service = () =>
+    new HabitTaskService(
+      prisma,
+      new HabitLocalDateService(),
+      new IdempotencyService(prisma),
+      new HabitStreakService(prisma, new HabitLocalDateService()),
+    );
 
   const habit = (overrides: Record<string, unknown> = {}) => ({
     id: 'h1',
@@ -207,6 +214,19 @@ describe('HabitTaskService', () => {
       expect(prisma.habitTaskEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ action: 'ADD', value: 100, source: 'API' }) }),
       );
+    });
+
+    it('recalculates the habit streak in the same transaction when a task is completed', async () => {
+      prisma.habitTask.findFirst.mockResolvedValue(task({ progressValue: 1900 }));
+      prisma.habitTask.update.mockImplementation(({ data }: any) =>
+        Promise.resolve(task({ status: data.status, progressValue: data.progressValue, completedAt: data.completedAt, version: 2 })),
+      );
+      prisma.habit.findUnique.mockResolvedValue({ ...habit(), currentStreak: 0, bestStreak: 0, createdAt: new Date('2026-09-01T00:00:00Z') });
+      prisma.habitTask.findMany.mockResolvedValue([
+        { localDate: new Date('2026-09-25T00:00:00Z'), status: 'COMPLETED' },
+      ]);
+      await service().updateProgress('u', 'h1', 't1', { action: 'ADD', value: 100, version: 1 }, 'k12');
+      expect(prisma.habit.update).toHaveBeenCalledWith({ where: { id: 'h1' }, data: { currentStreak: 1, bestStreak: 1 } });
     });
   });
 
