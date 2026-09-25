@@ -137,8 +137,8 @@ export class HabitTaskService {
   }
 
   /** ADD / SET прогресса задания. */
-  async updateProgress(userId: string, habitId: string, taskId: string, dto: TaskProgressDto, key?: string) {
-    return this.idempotency.run(userId, key, { habitId, taskId, ...dto }, async (tx) => {
+  async updateProgress(userId: string, habitId: string, taskId: string, dto: TaskProgressDto, key?: string, source: string = 'API') {
+    return this.idempotency.run(userId, key, { habitId, taskId, ...dto, source }, async (tx) => {
       const task = await this.loadEditableTask(tx, userId, habitId, taskId, dto.version);
       const habit = task.habit;
 
@@ -169,7 +169,7 @@ export class HabitTaskService {
       }
 
       await tx.habitTaskEvent.create({
-        data: { taskId: task.id, action: dto.action, value: dto.value ?? null, source: 'API' },
+        data: { taskId: task.id, action: dto.action, value: dto.value ?? null, source },
       });
 
       const updated = await tx.habitTask.update({

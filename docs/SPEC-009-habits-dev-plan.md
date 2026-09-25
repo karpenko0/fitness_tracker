@@ -227,7 +227,8 @@ model HabitNotification {
 - **Unit:** все 8 требований блока Streak. **Integration:** изменение выполнения до конца дня → streak пересчитан.
 - *DoD:* блок «Streak» закрыт.
 
-### Фаза 4 — Telegram-уведомления и callbacks (2.5 дня)
+### Фаза 4 — Telegram-уведомления и callbacks (2.5 дня) ✅ ГОТОВО
+> Реализовано: `telegram/telegram-bot.client.ts` — fetch к Bot API (`sendMessage` → `{ok}` | retry (429 c `retry_after`, 5xx, сеть) | blocked (403) | fatal (прочие 4xx); токен не попадает в сообщения об ошибках); `telegram/habit-notification.service.ts` — планирование SCHEDULED-уведомлений для активных привычек с невыполненным заданием (dedup через `@@unique([habitId, taskLocalDate, kind])`, findUnique+create), выбор due по локальному времени привычки (`Intl` в её tz), отправка: SENT / retry ≤ 3 (всего ≤ 4 попыток) → FAILED / blocked → `user.notificationsDisabled = true` + FAILED 'BOT_BLOCKED' + отмена прочих SCHEDULED пользователя; для COMPLETED/SKIPPED/EXPIRED задания и ARCHIVED привычки → CANCELLED без отправки; PAUSED и отключённые уведомления — пропуск; статусы привычки/задания не меняются; MEDICATION — нейтральный фиксированный текст без названия/дозировки. `workers/habit-reminder.worker.ts` — cron каждую минуту (SLA ≤ 2 мин). `telegram/habit-callback.service.ts` + `habit-callback.controller.ts` — `POST /api/v1/telegram/habits/callback` (`habit_done:<taskId>`, чужой telegramUserId → 403 TELEGRAM_CALLBACK_FORBIDDEN, COMPLETED → `{ok:true, alreadyDone:true}`, иначе идемпотентный ключ `tg:<callback_query.id>` → тот же `updateProgress` c source `TELEGRAM_CALLBACK`; опц. секрет вебхука `X-Telegram-Bot-Api-Secret-Token` ↔ `TELEGRAM_WEBHOOK_SECRET`, добавлен в `.env.example`). Тесты: `telegram-bot.client.spec.ts` (8), `habit-notification.service.spec.ts` (18), `habit-callback.service.spec.ts` (10), reminder-воркер в `habit-workers.spec.ts` (3), `test/integration/habit-callback.api.spec.ts` (7) — 46 новых; полный прогон 43/43 suites, 307/307 tests.
 - `telegram-bot.client` (fetch к Bot API, mock в тестах): sendMessage, обработка 429 (retry_at), 403 → blocked.
 - `habit-reminder.worker`: ежеминутный выбор due-напоминаний (локальное время пользователя, окно ≤ 2 мин при штатной работе — cron каждую минуту), не шлёт для COMPLETED/PAUSED/ARCHIVED, dedup через `HabitNotification @@unique`, retry ≤ 3 с backoff, при blocked → отключение уведомлений пользователя; ошибка доставки не меняет статусы.
 - Нейтральный текст для MEDICATION (без препарата/дозировки/медицинских заметок) — отдельный unit-тест на содержимое.
@@ -298,7 +299,7 @@ POST/GET/GET:id/PATCH /habits · pause/resume/archive · GET /habits/today · о
 - Создание/управление привычками (10 требований) → Фаза 1 ✅ (кроме «пауза/архив не создаёт новых заданий» — проверяется в Фазе 2 вместе с генерацией заданий)
 - Ежедневные задания (12) → Фаза 2
 - Streak (8) → Фаза 3
-- Telegram-уведомления (12) → Фаза 4
+- Telegram-уведомления (12) → Фаза 4 ✅
 - Безопасность и качество (9) → Фазы 1–5 (сквозные)
 - Unit/Integration/E2E (§16) → Фазы 1–6
 
