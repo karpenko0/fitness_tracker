@@ -10,7 +10,7 @@
 
 Проверено поиском по обоим бэкендам (`grep -ri "habit\|streak\|привычк"`) и разбором `prisma/schema.prisma`:
 
-> **Модуль привычек не реализован.** Слова `habit` в коде нет ни разу (проверено `grep -ri habit` по `backend-nest/src`, `backend/app`, `prisma/schema.prisma`); в схеме Prisma нет моделей Habit/HabitTask, нет воркеров, нет отправки Telegram-сообщений (есть только валидация `initData` для входа — `src/auth/services/telegram-validation.service.ts`).
+> **Статус на 2026-09-25: ВСЕ ФАЗЫ 0–6 ЗАВЕРШЕНЫ.** (Исходный аудит от 2026-09-23:) **Модуль привычек не реализован.** Слова `habit` в коде нет ни разу (проверено `grep -ri habit` по `backend-nest/src`, `backend/app`, `prisma/schema.prisma`); в схеме Prisma нет моделей Habit/HabitTask, нет воркеров, нет отправки Telegram-сообщений (есть только валидация `initData` для входа — `src/auth/services/telegram-validation.service.ts`).
 > Уточнение: в dashboard есть **недельный streak тренировок** (`StreakDto {currentWeeks, bestWeeks}` в `src/dashboard/dto/dashboard-response.dto.ts`, расчёт `streak()`/`bestStreak()` в `src/dashboard/dashboard-aggregation.service.ts:73-74` + unit-тест). Это не streak привычек из SPEC-009, но готовый паттерн расчёта streak по локальным датам с учётом timezone — использовать как референс для `streak.service.ts`.
 
 Статус всех требований спецификации — **«не готово»** (детальная таблица — раздел 8).
@@ -271,16 +271,16 @@ E2E-сценарии (Cypress во `frontend/cypress` либо supertest-сце�
 | валидация DAILY/WEEKDAYS/ONE_TIME | `habit-validation.service.spec.ts` |
 | создание ежедневных заданий / дубли | `habit-task.service.spec.ts` |
 | ADD и SET / авто-завершение / переходы статусов | `habit-task.service.spec.ts` |
-| текущий и лучший streak / дни вне расписания / timezone | `streak.service.spec.ts` |
+| текущий и лучший streak / дни вне расписания / timezone | `habit-streak.service.spec.ts` |
 | валидация времени уведомлений / лимиты напоминаний | `habit-notification.service.spec.ts` |
-| выбор задач для worker / retry / дедупликация | `habit-reminder.worker.spec.ts` |
-| валидация и идемпотентность callbacks | `habit-callback.controller.spec.ts` |
-| маскирование чувствительных данных | `redact-sensitive-data.spec.ts` (расширить) |
+| выбор задач для worker / retry / дедупликация | `habit-notification.service.spec.ts`, `habit-workers.spec.ts` |
+| валидация и идемпотентность callbacks | `habit-callback.service.spec.ts`, `telegram-bot.client.spec.ts` |
+| маскирование чувствительных данных | `test/unit/redact-sensitive-data.spec.ts` (расширен в Фазе 5) |
 
-### Integration (`test/integration/habits.api.spec.ts` и др., паттерн — mock Prisma как в существующих spec)
-POST/GET/GET:id/PATCH /habits · pause/resume/archive · GET /habits/today · обновление/пропуск задания · история · optimistic locking (409) · ownership/RBAC · идемпотентность всех записей (повтор ключа = тот же ответ; другой body = 409 IDEMPOTENCY_KEY_REUSED) · rate limiting (429) · генерация заданий воркером · Telegram через mock API · retry и блокировка бота · callback-кнопки.
+### Integration (`test/integration/`, паттерн — mock Prisma как в существующих spec)
+`habits.api.spec.ts` (16) — POST/GET/GET:id/PATCH · pause/resume/archive · идемпотентность. `habit-tasks.api.spec.ts` (12) — GET /habits/today · прогресс/пропуск · optimistic locking (409) · IDEMPOTENCY_KEY_REUSED. `habit-callback.api.spec.ts` (7) — callback-кнопки, секрет вебхука. `habit-security.api.spec.ts` (9) — 401 (реальный JwtStrategy) · ownership · 429 (реальный ThrottlerGuard). `habit-perf.api.spec.ts` (2) — p95 ≤ 300 мс. `habit-scenarios.api.spec.ts` (10) — E2E-сценарии §16.
 
-### E2E — 10 сценариев из Фазы 6.
+### E2E — 10 сценариев из Фазы 6 → `test/integration/habit-scenarios.api.spec.ts` (все зелёные).
 
 ---
 
@@ -296,7 +296,7 @@ POST/GET/GET:id/PATCH /habits · pause/resume/archive · GET /habits/today · о
 
 ## 8. Статус чек-листа спецификации
 
-**Все ~60 требований блоков «Создание и управление привычками», «Ежедневные задания», «Streak», «Telegram-уведомления», «Безопасность и качество», «Тестирование» — НЕ реализованы** (аудит от 2026-09-23: ни одного совпадения `habit|streak` в `backend-nest/src`, `backend/app`, `prisma/schema.prisma`). Покрытие по фазам:
+**Все ~60 требований блоков «Создание и управление привычками», «Ежедневные задания», «Streak», «Telegram-уведомления», «Безопасность и качество», «Тестирование» — реализованы и покрыты тестами** (46/46 suites, 330/330 tests; коммиты c4af939, 534f6b0, 043f76e, 736ec5b, 658292a, 40347e4). Покрытие по фазам:
 
 - Создание/управление привычками (10 требований) → Фаза 1 ✅ (кроме «пауза/архив не создаёт новых заданий» — проверяется в Фазе 2 вместе с генерацией заданий)
 - Ежедневные задания (12) → Фаза 2
@@ -305,7 +305,7 @@ POST/GET/GET:id/PATCH /habits · pause/resume/archive · GET /habits/today · о
 - Безопасность и качество (9) → Фазы 1–5 (сквозные)
 - Unit/Integration/E2E (§16) → Фазы 1–6 ✅
 
-Готово на сегодня: только базовая инфраструктура (auth, idempotency-паттерн, rate limiting, маскирование логов, timezone-утилиты) и зелёный baseline тестов.
+Готово: модуль привычек целиком (модель+миграция, CRUD, задания, streak, Telegram-уведомления и callbacks, безопасность, p95-замеры, E2E-сценарии, документация) поверх базовой инфраструктуры (auth, idempotency, rate limiting, маскирование логов, timezone-утилиты).
 
 ## 9. Как запускать проверки в этой песочнице
 
