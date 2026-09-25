@@ -3,14 +3,20 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateHabitDto, UpdateHabitDto } from './dto/create-habit.dto';
 import { ListHabitsQueryDto } from './dto/list-habits-query.dto';
+import { TaskProgressDto } from './dto/task-progress.dto';
+import { TaskSkipDto } from './dto/task-skip.dto';
 import { HabitService } from './habit.service';
+import { HabitTaskService } from './habit-task.service';
 
 @ApiTags('habits')
 @ApiBearerAuth()
 @Controller('api/v1/habits')
 @UseGuards(AuthGuard('jwt'))
 export class HabitController {
-  constructor(private readonly habitService: HabitService) {}
+  constructor(
+    private readonly habitService: HabitService,
+    private readonly habitTaskService: HabitTaskService,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -29,10 +35,40 @@ export class HabitController {
     return this.habitService.list(req.user.userId, query);
   }
 
+  @Get('today')
+  @ApiOperation({ summary: 'Задания пользователя на локальную дату каждой привычки' })
+  today(@Request() req: any) {
+    return this.habitTaskService.getToday(req.user.userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Привычка по id (только своя)' })
   get(@Request() req: any, @Param('id') id: string) {
     return this.habitService.get(req.user.userId, id);
+  }
+
+  @Post(':id/tasks/:taskId/progress')
+  @ApiOperation({ summary: 'Обновить прогресс задания (ADD увеличивает, SET заменяет)' })
+  updateProgress(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: TaskProgressDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.habitTaskService.updateProgress(req.user.userId, id, taskId, dto, idempotencyKey);
+  }
+
+  @Post(':id/tasks/:taskId/skip')
+  @ApiOperation({ summary: 'Пропустить незавершённое задание' })
+  skipTask(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: TaskSkipDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.habitTaskService.skip(req.user.userId, id, taskId, dto.version, idempotencyKey);
   }
 
   @Patch(':id')

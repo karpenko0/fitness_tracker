@@ -212,7 +212,8 @@ model HabitNotification {
 - **Unit:** валидация всех типов/целей, периодичности, лимит 20, дубли. **Integration:** POST/GET/PATCH, pause/resume/archive, идемпотентность, ownership, 401, rate limiting.
 - *DoD:* требования блоков «Создание и управление привычками» и частично «Безопасность» закрыты тестами.
 
-### Фаза 2 — Ежедневные задания и прогресс (2 дня)
+### Фаза 2 — Ежедневные задания и прогресс (2 дня) ✅ ГОТОВО
+> Реализовано: `HabitLocalDateService` (локальная дата/день недели по IANA tz), `HabitTaskService` (генерация по DAILY/WEEKDAYS/ONE_TIME, upsert по `@@unique([habitId, localDate])` + страховка P2002, ADD/SET, авто-COMPLETED при progress ≥ goal, BOOLEAN без числового значения, skip, EXPIRED по окончании локального дня с учётом tz привычки, optimistic locking, ownership), `GET /habits/today` (on-demand генерация для активных), воркеры `@nestjs/schedule`: генерация каждый час, экспирация каждые 15 минут; задание создаётся сразу при создании привычки. Тесты: `habit-local-date.service.spec.ts` (4), `habit-task.service.spec.ts` (22), `habit-workers.spec.ts` (2), `test/integration/habit-tasks.api.spec.ts` (12) — 40 новых; полный прогон 38/38 suites, 248/248 tests. Streak при завершении задания пока не пересчитывается — это Фаза 3.
 - `habit-task.service`: генерация (DAILY — одно на локальный день; WEEKDAYS — только выбранные дни; ONE_TIME — одно на дату; PAUSED/ARCHIVED — не генерируются), ADD/SET, авто-COMPLETED при progress ≥ goal, skip, expire-worker (незавершённые → EXPIRED по окончании локального дня; COMPLETED не трогается).
 - `habit-task-generation.worker` (@nestjs/schedule, cron каждый час + при создании привычки — генерация на сегодня), идемпотентный upsert.
 - GET `/habits/today` одним составным запросом + индексы.

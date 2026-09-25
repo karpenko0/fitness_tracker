@@ -6,6 +6,8 @@ import * as request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { HabitController } from '../../src/habit/habit.controller';
 import { HabitService } from '../../src/habit/habit.service';
+import { HabitTaskService } from '../../src/habit/habit-task.service';
+import { HabitLocalDateService } from '../../src/habit/habit-local-date.service';
 import { HabitValidationService } from '../../src/habit/habit-validation.service';
 import { IdempotencyService } from '../../src/common/services/idempotency.service';
 import { TransformInterceptor } from '../../src/common/interceptors/transform.interceptor';
@@ -24,6 +26,10 @@ describe('Habits API (integration)', () => {
       update: jest.fn(),
     },
     idempotencyKey: { findUnique: jest.fn(), create: jest.fn() },
+    habitTask: {
+      upsert: jest.fn().mockResolvedValue({ id: 't1', habitId: 'h1', localDate: new Date('2026-09-25'), status: 'PENDING', progressValue: null, completedAt: null, skippedAt: null, expiredAt: null, version: 1 }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma)),
   };
 
@@ -65,7 +71,7 @@ describe('Habits API (integration)', () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [HabitController],
-      providers: [HabitService, HabitValidationService, IdempotencyService, { provide: PrismaClient, useValue: prisma }],
+      providers: [HabitService, HabitTaskService, HabitLocalDateService, HabitValidationService, IdempotencyService, { provide: PrismaClient, useValue: prisma }],
     })
       .overrideGuard(AuthGuard('jwt'))
       .useValue({

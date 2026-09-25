@@ -2,6 +2,8 @@ import { createHash } from 'crypto';
 import { IdempotencyService } from '../common/services/idempotency.service';
 import { CreateHabitDto } from './dto/create-habit.dto';
 import { HabitService } from './habit.service';
+import { HabitTaskService } from './habit-task.service';
+import { HabitLocalDateService } from './habit-local-date.service';
 import { HabitValidationService } from './habit-validation.service';
 
 describe('HabitService', () => {
@@ -14,10 +16,17 @@ describe('HabitService', () => {
       update: jest.fn(),
     },
     idempotencyKey: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
+    habitTask: { upsert: jest.fn().mockResolvedValue({ id: 't1', habitId: 'h1', localDate: new Date('2026-09-25'), status: 'PENDING', progressValue: null, version: 1 }) },
     $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma)),
   };
 
-  const service = () => new HabitService(prisma, new HabitValidationService(), new IdempotencyService(prisma));
+  const service = () =>
+    new HabitService(
+      prisma,
+      new HabitValidationService(),
+      new IdempotencyService(prisma),
+      new HabitTaskService(prisma, new HabitLocalDateService(), new IdempotencyService(prisma)),
+    );
 
   const waterDto = (): CreateHabitDto =>
     ({ title: 'Пить воду', type: 'WATER', goalType: 'COUNT', goalValue: 2000, unit: 'ML', schedule: 'DAILY', timezone: 'Europe/Moscow' } as CreateHabitDto);

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma.module';
@@ -26,6 +27,7 @@ import { HabitModule } from './habit/habit.module';
         limit: 100,
       },
     ]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UserModule,

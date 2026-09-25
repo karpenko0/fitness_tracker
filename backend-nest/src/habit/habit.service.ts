@@ -10,6 +10,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { IdempotencyService } from '../common/services/idempotency.service';
 import { CreateHabitDto, UpdateHabitDto } from './dto/create-habit.dto';
 import { HabitValidationService } from './habit-validation.service';
+import { HabitTaskService } from './habit-task.service';
 
 export const MAX_ACTIVE_HABITS = 20;
 
@@ -19,6 +20,7 @@ export class HabitService {
     @Inject(PrismaClient) private readonly prisma: PrismaClient,
     private readonly validation: HabitValidationService,
     private readonly idempotency: IdempotencyService,
+    private readonly tasks: HabitTaskService,
   ) {}
 
   async create(userId: string, dto: CreateHabitDto, key?: string) {
@@ -58,6 +60,8 @@ export class HabitService {
           status: 'ACTIVE',
         },
       });
+      // Задание на сегодня (или на дату ONE_TIME) создаём сразу, идемпотентно
+      await this.tasks.ensureTaskForHabit(habit, new Date(), tx);
       return this.serialize(habit);
     }, 201);
   }
