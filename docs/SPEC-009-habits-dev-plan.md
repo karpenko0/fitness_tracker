@@ -243,7 +243,8 @@ model HabitNotification {
 - p95: замер через `load-smoke.js`-подобный сценарий для `/habits/today` и progress-update (цель ≤ 300 мс; локально — без сети, на моках БД измеряем только handler-time; полноценный замер — на стенде с PostgreSQL, зафиксировать в CI-инструкциях).
 - Аудит логов: grep по логам на токены/initData/notes.
 
-### Фаза 6 — E2E и документация (1.5 дня)
+### Фаза 6 — E2E и документация (1.5 дня) ✅ ГОТОВО
+> Реализовано: `test/helpers/memory-prisma.ts` — stateful in-memory Prisma (where: равенство/equals-insensitive/in/not/lt/композитные unique/вложенные habit+user; orderBy/skip/take/select/include; `{increment}`; `$transaction` — callback с последовательной очередью (эмуляция изоляции БД) и массив); `test/integration/habit-scenarios.api.spec.ts` (10) — все 10 E2E-сценариев §16 поверх полного HTTP-слоя (оба контроллера, все сервисы, реальные ValidationPipe/TransformInterceptor/HttpExceptionFilter, реальный JwtStrategy не нужен — guard override): 1) Вода +250×8 → COMPLETED + streak 1; 2) Шаги ПН/СР/ПТ — вторник не рвёт (recalc с явным now); 3) Растяжка — напоминание → callback → COMPLETED; 4) MEDICATION — нейтральный текст; 5) Skip → currentStreak 0, bestStreak сохранён; 6) конец дня → EXPIRED; 7) Пауза → нет новых заданий/уведомлений; 8) блокировка бота → notificationsDisabled + BOT_BLOCKED, статусы не меняются; 9) два параллельных progress → 201+409 VERSION_CONFLICT, прогресс без дубля; 10) чужая привычка → 404/403. Документация: `docs/API.md` — раздел Habit Endpoints (все роуты, коды ошибок, идемпотентность, callback, воркеры); `docs/DATABASE.md` — таблицы Habit/HabitTask/HabitTaskEvent/HabitNotification + User.notificationsDisabled; Swagger — все роуты с @ApiTags/@ApiOperation (habits, telegram). Полный прогон 46/46 suites, 330/330 tests.
 E2E-сценарии (Cypress во `frontend/cypress` либо supertest-сценарии поверх поднятого API с тестовой БД):
 1. «Вода»: создать → +250 мл → цель → streak+1.
 2. «Шаги» ПН/СР/ПТ: вторник не рвёт streak.
@@ -302,7 +303,7 @@ POST/GET/GET:id/PATCH /habits · pause/resume/archive · GET /habits/today · о
 - Streak (8) → Фаза 3
 - Telegram-уведомления (12) → Фаза 4 ✅
 - Безопасность и качество (9) → Фазы 1–5 (сквозные)
-- Unit/Integration/E2E (§16) → Фазы 1–6
+- Unit/Integration/E2E (§16) → Фазы 1–6 ✅
 
 Готово на сегодня: только базовая инфраструктура (auth, idempotency-паттерн, rate limiting, маскирование логов, timezone-утилиты) и зелёный baseline тестов.
 

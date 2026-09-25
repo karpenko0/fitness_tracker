@@ -198,6 +198,86 @@ List audit logs.
 - `userId` (uuid, optional)
 - `action` (string, optional)
 
+### Habit Endpoints (SPEC-009)
+
+Префикс `/api/v1/habits`. Все записи требуют заголовок `Idempotency-Key` (без него — 409 `IDEMPOTENCY_KEY_REQUIRED`; повтор с тем же ключом и телом возвращает сохранённый ответ, с иным телом — 409 `IDEMPOTENCY_KEY_REUSED`). Ответы в формате `{ "data": ... }`, ошибки `{ "error": { code, message, details?, requestId } }`.
+
+#### POST /habits
+Создать привычку (201). Типы: `WATER`, `STEPS`, `SLEEP`, `PROTEIN`, `MEDICATION`, `STRETCHING`, `CUSTOM`. `MEDICATION` — только `goalType: BOOLEAN`; `STEPS` — unit `STEPS`; `WATER` — unit `ML`. Лимит 20 активных (422 `HABIT_LIMIT_EXCEEDED`), дубль активного названия — 409 `DUPLICATE_ACTIVE_HABIT`.
+
+**Request:**
+```json
+{
+  "title": "Пить воду",
+  "type": "WATER",
+  "goalType": "COUNT",
+  "goalValue": 2000,
+  "unit": "ML",
+  "schedule": "DAILY",
+  "weekdays": [],
+  "timezone": "Europe/Moscow",
+  "reminderTime": "12:30",
+  "telegramChatId": "123456"
+}
+```
+`schedule`: `DAILY` | `WEEKDAYS` (нужен `weekdays`, 1=ПН…7=ВС) | `ONE_TIME` (нужна `oneTimeDate`).
+
+#### GET /habits
+Список привычек с пагинацией. Query: `status` (`ACTIVE`|`PAUSED`|`ARCHIVED`), `page`, `pageSize`.
+
+#### GET /habits/today
+Задания на локальную дату каждой привычки; недостающее задание для активной привычки создаётся на месте.
+
+**Response:**
+```json
+{
+  "data": {
+    "items": [
+      {
+        "habit": { "id": "uuid", "title": "Пить воду", "status": "ACTIVE", "currentStreak": 3, "bestStreak": 7 },
+        "localDate": "2026-09-25",
+        "task": { "id": "uuid", "status": "PENDING", "progressValue": 500, "version": 1 }
+      }
+    ]
+  }
+}
+```
+
+#### GET /habits/:id
+Привычка целиком (404 `HABIT_NOT_FOUND` для чужой/несуществующей).
+
+#### PATCH /habits/:id
+Изменение (title, goalValue, reminderTime, timezone…). Обязателен `version` — при устаревшем 409 `HABIT_VERSION_CONFLICT`. Смена timezone не создаёт ложный разрыв streak (пересчёт по локальным датам).
+
+#### POST /habits/:id/tasks/:taskId/progress
+Прогресс задания (201). `action: "ADD"` (инкремент) | `"SET"` (замена), `value` (для `COUNT`; отрицательное — 400 `VALIDATION_ERROR`; для `BOOLEAN` значение запрещено — 400). При достижении цели задание становится `COMPLETED`, streak пересчитывается. Ошибки: 404 `HABIT_TASK_NOT_FOUND`, 409 `HABIT_TASK_VERSION_CONFLICT`, 409 `TASK_ALREADY_CLOSED`.
+
+**Request:**
+```json
+{ "action": "ADD", "value": 250, "version": 1 }
+```
+
+#### POST /habits/:id/tasks/:taskId/skip
+Пропуск задания (201). `SKIPPED` рвёт текущий streak (`bestStreak` не уменьшается).
+
+**Request:**
+```json
+{ "version": 1 }
+```
+
+#### POST /habits/:id/pause | /resume | /archive
+Управление статусом (200). Пауззированные/архивированные привычки не получают новых заданий и уведомлений. Пауза архивированной — 409.
+
+#### POST /telegram/habits/callback
+Webhook для callback-кнопок Telegram-бота «Отметить выполненной». Без JWT; при заданном `TELEGRAM_WEBHOOK_SECRET` требуется заголовок `X-Telegram-Bot-Api-Secret-Token` (иначе 403 `WEBHOOK_SECRET_INVALID`). Callback чужого Telegram-пользователя — 403 `TELEGRAM_CALLBACK_FORBIDDEN`. Повторный callback идемпотентен (ключ `tg:<callback_query.id>`): уже выполненное задание — `{ "data": { "ok": true, "alreadyDone": true } }`.
+
+**Request (тело — Telegram Update):**
+```json
+{ "callback_query": { "id": "cq1", "from": { "id": 123456 }, "data": "habit_done:<taskId>" } }
+```
+
+**Фоновые воркеры:** генерация заданий (каждый час), экспирация незавершённых заданий по окончании локального дня (каждые 15 минут), напоминания Telegram (каждую минуту; не более 3 retry; при блокировке бота уведомления пользователя отключаются; текст для `MEDICATION` нейтральный — без препарата и дозировки).
+
 ## Pagination
 
 All list endpoints return paginated results:
