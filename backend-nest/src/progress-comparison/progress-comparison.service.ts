@@ -206,7 +206,7 @@ export class ProgressComparisonService {
 
     // Вычисляем предыдущий период такой же длины, сразу предшествующий текущему
     const previousTo = new Date(currentFrom);
-    previousTo.setMilliseconds(previousTo.getMilliseconds - 1); // Момент перед началом текущего периода
+    previousTo.setTime(previousTo.getTime() - 1); // Момент перед началом текущего периода
     const previousFrom = new Date(previousTo);
     previousFrom.setTime(previousFrom.getTime() - periodLengthMs);
 
@@ -299,10 +299,12 @@ export class ProgressComparisonService {
    * (аналогично методу в ProgressChartService, но упрощённо)
    */
   private aggregatePointValues(
-    points: Array<{ localDate: Date; value: number | null }>,
+    points: Array<{ localDate: Date; value: unknown }>,
     metric: string
   ): number | null {
-    const validPoints = points.filter(p => p.value !== null);
+    const validPoints = points
+      .filter(p => p.value !== null && p.value !== undefined)
+      .map(p => ({ localDate: p.localDate, value: Number(p.value) }));
 
     if (validPoints.length === 0) {
       return null;

@@ -81,13 +81,19 @@ export class ProgressChartService {
         to: options.to,
       });
 
+      const dailyPoints = dailyAggregates.map(a => ({
+        localDate: a.localDate,
+        value: a.value == null ? null : Number(a.value),
+      }));
+
       // Если групппировка по дням, возвращаем как есть
       if (options.groupBy === 'DAY') {
-        return this.formatChartResponse(options.metric, options.groupBy, options.from, options.to, dailyAggregates);
+        return this.formatChartResponse(options.metric, options.groupBy, options.from, options.to,
+          dailyPoints.map(p => ({ date: p.localDate.toISOString().split('T')[0], value: p.value })));
       }
 
       // Иначе агрегируем дневные данные до запрошенной групппировки
-      const aggregatedData = this.aggregateDailyData(dailyAggregates, options.groupBy, options.metric, options.from, options.to);
+      const aggregatedData = this.aggregateDailyData(dailyPoints, options.groupBy as 'WEEK' | 'MONTH', options.metric, options.from, options.to);
 
       // Проверяем, что количество точек не превышает 365
       if (aggregatedData.length > 365) {
@@ -232,7 +238,7 @@ export class ProgressChartService {
         if (!weekMap.hasOwnProperty.call(weekMap, weekKey)) {
           weekMap.set(weekKey, []);
         }
-        weekMap.get(weekKey).push(point);
+        weekMap.get(weekKey)!.push(point);
       }
 
       // Для каждой недели вычисляем агрегатное значение
@@ -258,7 +264,7 @@ export class ProgressChartService {
         if (!monthMap.hasOwnProperty.call(monthMap, monthKey)) {
           monthMap.set(monthKey, []);
         }
-        monthMap.get(monthKey).push(point);
+        monthMap.get(monthKey)!.push(point);
       }
 
       // Для каждого месяца вычисляем агрегатное значение
@@ -304,8 +310,8 @@ export class ProgressChartService {
         // Согласно спец: для графика рабочих весов возвращать максимальный и средний рабочий вес
         // Но в прогрессе обычно показывают тренд, поэтому, возможно, среднее
         // Пока делаем среднее значение
-        const sum = validPoints.reduce((sum, p) => sum + p.value!, 0);
-        return sum / validPoints.length;
+        const workingWeightTotal = validPoints.reduce((total, p) => total + p.value!, 0);
+        return workingWeightTotal / validPoints.length;
 
       case 'ESTIMATED_1RM':
         // Максимальный 1RM за период
@@ -328,10 +334,11 @@ export class ProgressChartService {
         const sortedPoints = [...validPoints].sort((a, b) => a.localDate.getTime() - b.localDate.getTime());
         return sortedPoints[sortedPoints.length - 1].value!;
 
-      default:
+      default: {
         // По умолчанию берём среднее
-        const sum = validPoints.reduce((sum, p) => sum + p.value!, 0);
-        return sum / validPoints.length;
+        const total = validPoints.reduce((acc, p) => acc + p.value!, 0);
+        return total / validPoints.length;
+      }
     }
   }
 

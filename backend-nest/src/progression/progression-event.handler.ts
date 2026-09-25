@@ -49,6 +49,10 @@ export class ProgressionEventHandler {
     // Рассчитываем агрегаты для даты завершения тренировки
     // Используем локальную дату пользователя (пока просто используем completedAt)
     // TODO: Нужно получить таймзону пользователя и перевести в локальную дату
+    if (!workout.completedAt) {
+      this.logger.error(`Workout ${payload.workoutId} has no completedAt`);
+      return null;
+    }
     const targetDate = new Date(workout.completedAt);
     await this.progressAggregateService.calculateAndSaveAggregates(workout.userId, targetDate);
 

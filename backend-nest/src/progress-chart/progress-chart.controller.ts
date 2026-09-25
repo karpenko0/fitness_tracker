@@ -2,14 +2,14 @@ import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { ProgressChartService } from './progress-chart.service';
 import { AuthGuard } from '@nestjs/passport';
 
-@Controller('progress-chart')
+@Controller('api/v1/progress-chart')
 @UseGuards(AuthGuard('jwt'))
 export class ProgressChartController {
   constructor(private progressChartService: ProgressChartService) {}
 
   @Get()
   async getChartData(
-    @Request() req,
+    @Request() req: any,
     @Query('metric') metric: string,
     @Query('from') from: string,
     @Query('to') to: string,

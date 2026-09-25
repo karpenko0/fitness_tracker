@@ -19,6 +19,8 @@ describe('ProgressAggregateService', () => {
       },
       $transaction: jest.fn((cb) => cb(prismaMock)),
     };
+    prismaMock.measurement.findMany.mockResolvedValue([]);
+    prismaMock.workout.findMany.mockResolvedValue([]);
 
     service = new ProgressAggregateService(
       prismaMock,

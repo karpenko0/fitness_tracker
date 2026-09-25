@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ProgressAggregateDimensionType, ProgressAggregateGroupBy, ProgressAggregateMetric, ProgressAggregateUnit } from '@prisma/client';
 import { ProgressionService } from '../progression/progression.service';
 import { WorkoutService } from '../workout/workout.service';
 
@@ -147,7 +147,7 @@ export class ProgressAggregateService {
       for (const exercise of workout.exercises) {
         for (const set of exercise.sets) {
           if (set.status === 'COMPLETED' && set.actualWeightKg !== null && set.actualReps !== null) {
-            const volume = set.actualWeightKg * set.actualReps;
+            const volume = Number(set.actualWeightKg) * Number(set.actualReps);
             totalVolume += volume;
             hasData = true;
           }
@@ -204,7 +204,7 @@ export class ProgressAggregateService {
       for (const exercise of workout.exercises) {
         for (const set of exercise.sets) {
           if (set.status === 'COMPLETED' && set.actualWeightKg !== null && set.actualReps !== null) {
-            const volume = set.actualWeightKg * set.actualReps;
+            const volume = Number(set.actualWeightKg) * Number(set.actualReps);
             programVolume += volume;
           }
         }
@@ -255,7 +255,7 @@ export class ProgressAggregateService {
 
         for (const set of exercise.sets) {
           if (set.status === 'COMPLETED' && set.actualWeightKg !== null && set.actualReps !== null) {
-            const volume = set.actualWeightKg * set.actualReps;
+            const volume = Number(set.actualWeightKg) * Number(set.actualReps);
             exerciseVolume += volume;
           }
         }
@@ -292,7 +292,6 @@ export class ProgressAggregateService {
         exercises: {
           include: {
             sets: true,
-            exercise: true,
           },
         },
       },
@@ -302,6 +301,7 @@ export class ProgressAggregateService {
 
     for (const workout of workouts) {
       for (const exercise of workout.exercises) {
+        if (!exercise.catalogExerciseId) continue;
         // Получаем мышечные группы упражнения из каталога
         const exerciseWithMuscles = await this.prisma.exerciseCatalogItem.findUnique({
           where: { id: exercise.catalogExerciseId },
@@ -318,7 +318,7 @@ export class ProgressAggregateService {
 
         for (const set of exercise.sets) {
           if (set.status === 'COMPLETED' && set.actualWeightKg !== null && set.actualReps !== null) {
-            const volume = set.actualWeightKg * set.actualReps;
+            const volume = Number(set.actualWeightKg) * Number(set.actualReps);
             for (const muscleGroup of muscleGroups) {
               const currentVolume = muscleGroupVolumes.get(muscleGroup) || 0;
               muscleGroupVolumes.set(muscleGroup, currentVolume + volume);
@@ -394,7 +394,7 @@ export class ProgressAggregateService {
           null,
           new Date(measurement.measuredAt),
           'DAY',
-          value.value,
+          value.value == null ? null : Number(value.value),
           unit,
         );
       }
@@ -423,14 +423,14 @@ export class ProgressAggregateService {
     await this.prisma.progressAggregate.create({
       data: {
         userId,
-        metric,
-        dimensionType,
+        metric: metric as ProgressAggregateMetric,
+        dimensionType: dimensionType as ProgressAggregateDimensionType,
         dimensionId,
         dimensionCode,
         localDate: new Date(localDate),
-        groupBy,
+        groupBy: groupBy as ProgressAggregateGroupBy,
         value,
-        unit,
+        unit: unit as ProgressAggregateUnit,
         calculationVersion: '1.0.0', // TODO: сделать конфигурируемым
         calculatedAt: new Date(),
       },

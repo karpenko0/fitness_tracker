@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ProgressPhotoPose, ProgressPhotoStatus } from '@prisma/client';
 import { 
   CreateProgressPhotoDto, 
   UpdateProgressPhotoDto 
@@ -59,7 +59,7 @@ export class ProgressPhotoService {
       where: {
         userId,
         localDate: new Date(dto.localDate),
-        pose: dto.pose,
+        pose: dto.pose as ProgressPhotoPose,
       },
     });
 
@@ -73,19 +73,19 @@ export class ProgressPhotoService {
         userId,
         measurementId: dto.measurementId,
         localDate: new Date(dto.localDate),
-        pose: dto.pose,
+        pose: dto.pose as ProgressPhotoPose,
         storageKey: dto.storageKey,
         previewStorageKey: dto.previewStorageKey,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
-        status: dto.status || 'PENDING',
+        status: (dto.status as ProgressPhotoStatus) || 'PENDING',
       },
     });
 
     return this.findOne(progressPhoto.id, userId);
   }
 
-  async findAll(userId: string, options: { skip?: number; take?: number; orderBy?: any }) {
+  async findAll(userId: string, options: { skip?: number; take?: number; orderBy?: any } = {}) {
     // Enforce Free/Pro restrictions: Free users can only see last 30 days
     const cutoffDate = await this.getCutoffDate(userId);
     
@@ -158,12 +158,12 @@ export class ProgressPhotoService {
       data: {
         measurementId: dto.measurementId,
         localDate: dto.localDate ? new Date(dto.localDate) : undefined,
-        pose: dto.pose,
+        pose: dto.pose as ProgressPhotoPose | undefined,
         storageKey: dto.storageKey,
         previewStorageKey: dto.previewStorageKey,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
-        status: dto.status,
+        status: dto.status as ProgressPhotoStatus | undefined,
       },
     });
 

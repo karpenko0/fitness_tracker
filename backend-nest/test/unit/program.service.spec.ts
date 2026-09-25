@@ -188,6 +188,8 @@ it('activates a program and creates assignment', async () => {
      prisma.starterProgram.update.mockResolvedValue();
      prisma.userProgramAssignment.upsert.mockResolvedValue({ id: 'a1', status: 'ACTIVE' });
      prisma.workout.create.mockResolvedValue({ id: 'w1' });
+     prisma.workoutExercise.create.mockResolvedValue({ id: 'we1' });
+     prisma.workoutSet.create.mockResolvedValue({ id: 'ws1' });
      const result = await service().activate('u', 'p1', 'key');
      expect(result).toBeDefined();
      expect(result.assignment.id).toBe('a1');

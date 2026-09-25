@@ -147,7 +147,7 @@ export class ProgressionService {
     if (workout.status !== WorkoutStatus.COMPLETED || !workout.completedAt) throw new ConflictException({ code: 'WORKOUT_NOT_COMPLETED', message: 'Workout must be completed' });
     if (!force && await tx.workoutCalculation.findUnique({ where: { workoutId } })) return this.getCalculatedSummary(tx, workout.userId, workoutId);
     if (force) await tx.personalRecord.deleteMany({ where: { userId: workout.userId, sourceWorkoutId: workoutId } });
-    const measurement = await tx.measurement.findFirst({ where: { userId: workout.userId, weightKg: { not: null }, measuredAt: { gte: new Date(workout.completedAt.getTime() - 30 * 86_400_000), lte: workout.completedAt } }, orderBy: { measuredAt: 'desc' } });
+    const bodyweight = await tx.measurementValue.findFirst({ where: { metric: 'WEIGHT', value: { not: null }, measurement: { userId: workout.userId, measuredAt: { gte: new Date(workout.completedAt.getTime() - 30 * 86_400_000), lte: workout.completedAt } } }, orderBy: { measurement: { measuredAt: 'desc' } } });
     let totalVolume: number | null = 0, completedSets = 0, skippedSets = 0;
     const allRecords: any[] = [];
     for (const exercise of workout.exercises.filter(item => item.status === 'ACTIVE' && item.kind === 'STRENGTH' && item.catalogExerciseId)) {
@@ -157,8 +157,8 @@ export class ProgressionService {
       const isStaticBodyweightExercise = catalog.bodyweightLoadFactor != null && Number(catalog.bodyweightLoadFactor) === 0;
       const effectiveWeightForSet = (set: CalculationSet): number | null | undefined => {
         if (catalog.bodyweightLoadFactor == null) return undefined;
-        if (isStaticBodyweightExercise || measurement?.weightKg == null) return null;
-        return Number(measurement.weightKg) * Number(catalog.bodyweightLoadFactor) + Number(set.actualWeightKg || 0);
+        if (isStaticBodyweightExercise || bodyweight?.value == null) return null;
+        return Number(bodyweight.value) * Number(catalog.bodyweightLoadFactor) + Number(set.actualWeightKg || 0);
       };
       const bodyweightVolumes = valid.map(set => this.volume.calculateSet(set, effectiveWeightForSet(set)));
       const volume = catalog.bodyweightLoadFactor == null ? this.volume.calculateExercise(valid) : bodyweightVolumes.some(value => value == null) ? null : bodyweightVolumes.reduce<number>((sum, value) => sum + (value ?? 0), 0);

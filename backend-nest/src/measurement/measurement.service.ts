@@ -6,6 +6,24 @@ import {
   MeasurementValueDto 
 } from './dto/measurement.dto';
 
+
+/**
+ * DTO keys of CircumferencesCmDto (camelCase) -> MeasurementMetric enum values (UPPER_SNAKE).
+ */
+export const MEASUREMENT_METRIC_BY_DTO_KEY: Record<string, string> = {
+  neck: 'NECK',
+  chest: 'CHEST',
+  waist: 'WAIST',
+  abdomen: 'ABDOMEN',
+  hips: 'HIPS',
+  bicepsLeft: 'BICEPS_LEFT',
+  bicepsRight: 'BICEPS_RIGHT',
+  thighLeft: 'THIGH_LEFT',
+  thighRight: 'THIGH_RIGHT',
+  calfLeft: 'CALF_LEFT',
+  calfRight: 'CALF_RIGHT',
+};
+
 @Injectable()
 export class MeasurementService {
   private readonly logger = new Logger(MeasurementService.name);
@@ -97,7 +115,7 @@ export class MeasurementService {
     });
 
     // Create measurement values
-    const valueData = [];
+    const valueData: { measurementId: string; metric: any; value: any }[] = [];
     if (dto.weightKg !== null && dto.weightKg !== undefined) {
       valueData.push({
         measurementId: measurement.id,
@@ -107,11 +125,12 @@ export class MeasurementService {
     }
 
     if (dto.circumferencesCm) {
-      for (const [metric, value] of Object.entries(dto.circumferencesCm)) {
-        if (value !== null && value !== undefined) {
+      for (const [key, value] of Object.entries(dto.circumferencesCm)) {
+        const metric = MEASUREMENT_METRIC_BY_DTO_KEY[key];
+        if (metric && value !== null && value !== undefined) {
           valueData.push({
             measurementId: measurement.id,
-            metric: metric as any, // TODO: proper typing
+            metric: metric as any,
             value,
           });
         }
@@ -127,7 +146,7 @@ export class MeasurementService {
     return this.findOne(measurement.id, userId);
   }
 
-  async findAll(userId: string, options: { skip?: number; take?: number; orderBy?: any }) {
+  async findAll(userId: string, options: { skip?: number; take?: number; orderBy?: any } = {}) {
     // Enforce Free/Pro restrictions: Free users can only see last 30 days
     const cutoffDate = await this.getCutoffDate(userId);
     
@@ -213,7 +232,7 @@ export class MeasurementService {
       where: { measurementId: id },
     });
 
-    const valueData = [];
+    const valueData: { measurementId: string; metric: any; value: any }[] = [];
     if (dto.weightKg !== null && dto.weightKg !== undefined) {
       valueData.push({
         measurementId: id,
@@ -223,11 +242,12 @@ export class MeasurementService {
     }
 
     if (dto.circumferencesCm) {
-      for (const [metric, value] of Object.entries(dto.circumferencesCm)) {
-        if (value !== null && value !== undefined) {
+      for (const [key, value] of Object.entries(dto.circumferencesCm)) {
+        const metric = MEASUREMENT_METRIC_BY_DTO_KEY[key];
+        if (metric && value !== null && value !== undefined) {
           valueData.push({
             measurementId: id,
-            metric: metric as any, // TODO: proper typing
+            metric: metric as any,
             value,
           });
         }

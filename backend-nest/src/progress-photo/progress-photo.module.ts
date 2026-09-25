@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProgressPhotoService } from './progress-photo.service';
 import { ProgressPhotoController } from './progress-photo.controller';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaModule } from '../prisma.module';
 
 @Module({
   imports: [PrismaModule],
