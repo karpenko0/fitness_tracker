@@ -64,6 +64,87 @@ async function main() {
   const strengthProgramWorkout = await prisma.programWorkout.upsert({ where: { programId_position: { programId: programs[2].id, position: 1 } }, update: { title: programs[2].firstWorkoutTitle }, create: { programId: programs[2].id, title: programs[2].firstWorkoutTitle, position: 1 } });
   await prisma.programWorkoutExercise.upsert({ where: { programWorkoutId_position: { programWorkoutId: strengthProgramWorkout.id, position: 1 } }, update: { exerciseId: exercises[1].id, plannedSets: [{ reps: 8, weightKg: 60, restSeconds: 120 }, { reps: 8, weightKg: 60, restSeconds: 120 }] }, create: { programWorkoutId: strengthProgramWorkout.id, exerciseId: exercises[1].id, position: 1, plannedSets: [{ reps: 8, weightKg: 60, restSeconds: 120 }, { reps: 8, weightKg: 60, restSeconds: 120 }] } });
 
+  // SPEC-009: демо-пользователь и демо-привычки (идемпотентно, фиксированные id)
+  const demoUserId = '00000000-0000-4000-8000-0000000000dd';
+  await prisma.user.upsert({
+    where: { id: demoUserId },
+    update: {},
+    create: {
+      id: demoUserId,
+      telegramId: BigInt('999000001'),
+      telegramUsername: 'demo_user',
+      firstName: 'Demo',
+      lastName: 'User',
+      telegramLanguageCode: 'ru',
+    },
+  });
+
+  const demoHabits = [
+    {
+      id: '00000000-0000-4000-8000-000000000101',
+      userId: demoUserId,
+      title: 'Пить воду',
+      type: 'WATER',
+      goalType: 'COUNT',
+      goalValue: 2000,
+      unit: 'ML',
+      schedule: 'DAILY',
+      weekdays: [],
+      timezone: 'Europe/Moscow',
+      reminderTime: '12:30',
+      telegramChatId: '999000001',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000102',
+      userId: demoUserId,
+      title: '10000 шагов',
+      type: 'STEPS',
+      goalType: 'COUNT',
+      goalValue: 10000,
+      unit: 'STEPS',
+      schedule: 'WEEKDAYS',
+      weekdays: [1, 3, 5],
+      timezone: 'Europe/Moscow',
+      reminderTime: null,
+      telegramChatId: null,
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000103',
+      userId: demoUserId,
+      title: 'Утренняя растяжка',
+      type: 'STRETCHING',
+      goalType: 'BOOLEAN',
+      goalValue: null,
+      unit: null,
+      schedule: 'DAILY',
+      weekdays: [],
+      timezone: 'Europe/Moscow',
+      reminderTime: '08:00',
+      telegramChatId: '999000001',
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000104',
+      userId: demoUserId,
+      title: 'Витамин D3',
+      type: 'MEDICATION',
+      goalType: 'BOOLEAN',
+      goalValue: null,
+      unit: null,
+      schedule: 'DAILY',
+      weekdays: [],
+      timezone: 'Europe/Moscow',
+      reminderTime: '09:00',
+      telegramChatId: '999000001',
+    },
+  ];
+  for (const demoHabit of demoHabits) {
+    await prisma.habit.upsert({
+      where: { id: demoHabit.id },
+      update: { title: demoHabit.title, goalValue: demoHabit.goalValue, reminderTime: demoHabit.reminderTime },
+      create: demoHabit as any,
+    });
+  }
+
   await prisma.$disconnect();
 }
 
