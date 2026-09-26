@@ -50,6 +50,8 @@ export class PaymentProcessor {
         if (isUniqueViolation(e)) {
           const existing = await this.prisma.payment.findUnique({ where: { telegramPaymentChargeId: data.telegramPaymentChargeId } });
           if (existing) return this.duplicate(existing.id, ctx);
+          // Конкурирующая оплата создала подписку (partial unique index) — повторяем как продление.
+          if (attempt < 2) continue;
         }
         if (e instanceof OptimisticLockError && attempt < 2) continue;
         throw e;

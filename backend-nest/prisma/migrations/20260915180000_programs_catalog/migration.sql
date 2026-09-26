@@ -1,3 +1,8 @@
+-- Fix: these enums were referenced below but never created by earlier migrations (fresh DB failed here).
+DO $$ BEGIN CREATE TYPE "FitnessGoal" AS ENUM ('WEIGHT_LOSS','MUSCLE_GAIN','MAINTENANCE','HEALTH','STRENGTH','FLEXIBILITY','ENDURANCE','MOBILITY_RECOVERY'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "ExperienceLevel" AS ENUM ('BEGINNER','INTERMEDIATE','ADVANCED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "TrainingLocation" AS ENUM ('GYM','HOME','OUTDOOR','MIXED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 ALTER TYPE "ProgramStatus" ADD VALUE IF NOT EXISTS 'ACTIVE';
 ALTER TYPE "ProgramStatus" ADD VALUE IF NOT EXISTS 'PAUSED';
 ALTER TYPE "ProgramStatus" ADD VALUE IF NOT EXISTS 'COMPLETED';

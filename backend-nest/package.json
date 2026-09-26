@@ -12,6 +12,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:subscriptions": "jest test/unit/subscription",
+    "test:subscriptions:db": "jest test/db --runInBand",
     "typecheck:subscriptions": "tsc -p tsconfig.subscription.json"
     ,"load:smoke": "node load-smoke.js"
   },

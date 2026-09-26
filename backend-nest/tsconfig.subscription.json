@@ -1,1 +1,1 @@
-{ "extends": "./tsconfig.json", "compilerOptions": { "noEmit": true, "incremental": false, "rootDir": "." }, "include": ["src/subscription/**/*.ts", "test/unit/subscription/**/*.ts"], "exclude": ["node_modules", "dist"] }
+{ "extends": "./tsconfig.json", "compilerOptions": { "noEmit": true, "incremental": false, "rootDir": "." }, "include": ["src/subscription/**/*.ts", "test/unit/subscription/**/*.ts", "test/db/**/*.ts"], "exclude": ["node_modules", "dist"] }

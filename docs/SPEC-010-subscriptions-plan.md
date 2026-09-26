@@ -55,3 +55,11 @@ paywall eligibility; RBAC покупки; сверка pre-checkout; маски�
 4. повторная доставка `successful_payment`;
 5. рестарт между приёмом webhook и бизнес-фиксацией;
 6. возврат в тестовой среде и отзыв доступа.
+
+## Этап 7. Приведение схемы и миграций (выполнено)
+- `schema.prisma`: удалены 26 дублирующихся моделей/enum’ов и старая версия `Measurement`; добавлены недостающие обратные связи (`User.progressPhotos`, `User.progressAggregates`, `Measurement.values`, `Measurement.photos`); файл переведён из UTF‑16 в UTF‑8; `prisma validate` проходит.
+- `20260915180000_programs_catalog`: в начало добавлено идемпотентное создание enum’ов `FitnessGoal`, `ExperienceLevel`, `TrainingLocation` — без этого миграция падала на чистой БД. Где она уже применена, изменение ни на что не влияет.
+- Новая `20260926110000_progress_measurements_sync`: таблицы `MeasurementValue`, `ProgressPhoto`, `ProgressAggregate` и новые колонки `Measurement` (у них не было миграции). `weightKg` сохранён и перенесён в `MeasurementValue(WEIGHT)`.
+- `20260926120000_subscriptions_stars`: id/FK переведены на `UUID` (в БД `User.id` — uuid; с TEXT FK не создавался).
+- Проверено на PostgreSQL 17: вся цепочка из 10 миграций применяется на пустой БД; все 47 моделей читаются реальным Prisma Client без ошибок.
+- `npm run test:subscriptions:db` (нужен `SUBSCRIPTION_DB_TEST_URL`) — 12 интеграционных тестов на реальной БД.

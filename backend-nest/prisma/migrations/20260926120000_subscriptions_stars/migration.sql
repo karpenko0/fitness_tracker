@@ -7,7 +7,7 @@ DO $$ BEGIN CREATE TYPE "RefundRequestStatus" AS ENUM ('PENDING', 'SUCCEEDED', '
 ALTER TYPE "SubscriptionPlan" ADD VALUE IF NOT EXISTS 'TRAINER_PRO';
 
 CREATE TABLE "subscription_plans" (
-  "id" TEXT PRIMARY KEY,
+  "id" UUID PRIMARY KEY,
   "code" VARCHAR(64) NOT NULL UNIQUE,
   "tier" "SubscriptionTier" NOT NULL,
   "title" VARCHAR(160) NOT NULL,
@@ -33,9 +33,9 @@ END $$ LANGUAGE plpgsql;
 CREATE TRIGGER subscription_plans_immutable BEFORE UPDATE ON "subscription_plans" FOR EACH ROW EXECUTE FUNCTION subscription_plans_immutable_price();
 
 CREATE TABLE "subscriptions" (
-  "id" TEXT PRIMARY KEY,
-  "user_id" TEXT NOT NULL REFERENCES "User"("id"),
-  "plan_id" TEXT NOT NULL REFERENCES "subscription_plans"("id"),
+  "id" UUID PRIMARY KEY,
+  "user_id" UUID NOT NULL REFERENCES "User"("id"),
+  "plan_id" UUID NOT NULL REFERENCES "subscription_plans"("id"),
   "tier" "SubscriptionTier" NOT NULL,
   "product_scope" VARCHAR(32) NOT NULL DEFAULT 'FITTRACKER',
   "status" "SubscriptionStatus" NOT NULL,
@@ -56,10 +56,10 @@ CREATE INDEX "subscriptions_period_end_idx" ON "subscriptions"("current_period_e
 CREATE UNIQUE INDEX "subscriptions_one_access_per_scope" ON "subscriptions"("user_id", "product_scope") WHERE "status" IN ('ACTIVE', 'EXPIRING');
 
 CREATE TABLE "payments" (
-  "id" TEXT PRIMARY KEY,
-  "user_id" TEXT NOT NULL REFERENCES "User"("id"),
-  "plan_id" TEXT NOT NULL REFERENCES "subscription_plans"("id"),
-  "subscription_id" TEXT REFERENCES "subscriptions"("id"),
+  "id" UUID PRIMARY KEY,
+  "user_id" UUID NOT NULL REFERENCES "User"("id"),
+  "plan_id" UUID NOT NULL REFERENCES "subscription_plans"("id"),
+  "subscription_id" UUID REFERENCES "subscriptions"("id"),
   "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
   "amount_stars" INTEGER NOT NULL CHECK ("amount_stars" BETWEEN 1 AND 2500000),
   "currency" CHAR(3) NOT NULL DEFAULT 'XTR' CHECK ("currency" = 'XTR'),
@@ -83,7 +83,7 @@ CREATE INDEX "payments_user_created_idx" ON "payments"("user_id", "created_at" D
 CREATE INDEX "payments_status_idx" ON "payments"("status", "paid_at");
 
 CREATE TABLE "telegram_webhook_events" (
-  "id" TEXT PRIMARY KEY,
+  "id" UUID PRIMARY KEY,
   "update_id" BIGINT NOT NULL UNIQUE,
   "event_type" VARCHAR(64) NOT NULL,
   "payload" JSONB NOT NULL,
@@ -97,8 +97,8 @@ CREATE TABLE "telegram_webhook_events" (
 CREATE INDEX "telegram_webhook_events_status_idx" ON "telegram_webhook_events"("status", "created_at");
 
 CREATE TABLE "financial_idempotency_keys" (
-  "id" TEXT PRIMARY KEY,
-  "user_id" TEXT NOT NULL REFERENCES "User"("id"),
+  "id" UUID PRIMARY KEY,
+  "user_id" UUID NOT NULL REFERENCES "User"("id"),
   "operation" VARCHAR(64) NOT NULL,
   "key" VARCHAR(128) NOT NULL,
   "request_hash" CHAR(64) NOT NULL,
@@ -110,19 +110,19 @@ CREATE TABLE "financial_idempotency_keys" (
 );
 
 CREATE TABLE "user_entitlements" (
-  "id" TEXT PRIMARY KEY,
-  "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+  "id" UUID PRIMARY KEY,
+  "user_id" UUID NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
   "entitlement" VARCHAR(64) NOT NULL,
-  "subscription_id" TEXT NOT NULL REFERENCES "subscriptions"("id"),
+  "subscription_id" UUID NOT NULL REFERENCES "subscriptions"("id"),
   "granted_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "expires_at" TIMESTAMPTZ NOT NULL,
   UNIQUE ("user_id", "entitlement")
 );
 
 CREATE TABLE "refund_requests" (
-  "id" TEXT PRIMARY KEY,
-  "payment_id" TEXT NOT NULL REFERENCES "payments"("id"),
-  "actor_user_id" TEXT NOT NULL REFERENCES "User"("id"),
+  "id" UUID PRIMARY KEY,
+  "payment_id" UUID NOT NULL REFERENCES "payments"("id"),
+  "actor_user_id" UUID NOT NULL REFERENCES "User"("id"),
   "reason" VARCHAR(64) NOT NULL,
   "status" "RefundRequestStatus" NOT NULL DEFAULT 'PENDING',
   "attempts" INTEGER NOT NULL DEFAULT 0,
