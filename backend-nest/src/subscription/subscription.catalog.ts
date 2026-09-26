@@ -1,0 +1,58 @@
+/**
+ * Единый каталог entitlements (SPEC-010 §3.1). Другие модули не должны хардкодить
+ * цены или тарифные правила — только коды entitlements отсюда.
+ */
+export const ENTITLEMENTS = {
+  UNLIMITED_PROGRAMS: 'UNLIMITED_PROGRAMS',
+  UNLIMITED_CUSTOM_EXERCISES: 'UNLIMITED_CUSTOM_EXERCISES',
+  ADVANCED_PROGRESS: 'ADVANCED_PROGRESS',
+  FULL_HISTORY: 'FULL_HISTORY',
+  PROGRESS_PHOTOS_UNLIMITED: 'PROGRESS_PHOTOS_UNLIMITED',
+  TRAINER_CLIENTS: 'TRAINER_CLIENTS',
+  TRAINER_PROGRAM_ASSIGNMENT: 'TRAINER_PROGRAM_ASSIGNMENT',
+} as const;
+
+export type Entitlement = (typeof ENTITLEMENTS)[keyof typeof ENTITLEMENTS];
+export type Tier = 'FREE' | 'PRO' | 'TRAINER_PRO';
+export type PaidTier = Exclude<Tier, 'FREE'>;
+
+export const TIER_ENTITLEMENTS: Record<Tier, Entitlement[]> = {
+  FREE: [],
+  PRO: [
+    ENTITLEMENTS.UNLIMITED_PROGRAMS,
+    ENTITLEMENTS.UNLIMITED_CUSTOM_EXERCISES,
+    ENTITLEMENTS.ADVANCED_PROGRESS,
+    ENTITLEMENTS.FULL_HISTORY,
+    ENTITLEMENTS.PROGRESS_PHOTOS_UNLIMITED,
+  ],
+  TRAINER_PRO: [
+    ENTITLEMENTS.UNLIMITED_PROGRAMS,
+    ENTITLEMENTS.UNLIMITED_CUSTOM_EXERCISES,
+    ENTITLEMENTS.ADVANCED_PROGRESS,
+    ENTITLEMENTS.FULL_HISTORY,
+    ENTITLEMENTS.PROGRESS_PHOTOS_UNLIMITED,
+    ENTITLEMENTS.TRAINER_CLIENTS,
+    ENTITLEMENTS.TRAINER_PROGRAM_ASSIGNMENT,
+  ],
+};
+
+/** Product scope: один ACTIVE/EXPIRING на пользователя в рамках scope. */
+export const PRODUCT_SCOPE = 'FITTRACKER';
+
+export const SUBSCRIPTION_STATUSES = ['ACTIVE', 'EXPIRING', 'CANCELLED', 'EXPIRED', 'REFUNDED'] as const;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+export const ACCESS_STATUSES: SubscriptionStatus[] = ['ACTIVE', 'EXPIRING'];
+
+export const PAYMENT_STATUSES = ['PENDING', 'PAID', 'REFUND_PENDING', 'REFUNDED', 'FAILED', 'CANCELLED'] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const STARS_CURRENCY = 'XTR';
+export const MIN_STARS = 1;
+export const MAX_STARS = 2_500_000;
+export const INVOICE_TTL_MINUTES = 30;
+export const IDEMPOTENCY_TTL_HOURS = 24;
+export const WEBHOOK_MAX_BODY_BYTES = 64 * 1024;
+export const REFUND_REASONS = ['DUPLICATE_CHARGE', 'TECHNICAL_ISSUE', 'USER_REQUEST', 'FRAUD', 'OTHER'] as const;
+
+export const VALUE_MILESTONES = ['FIRST_WORKOUT_STARTED', 'FIRST_WORKOUT_COMPLETED', 'PRO_RESULT_VIEWED'] as const;
+export type ValueMilestone = (typeof VALUE_MILESTONES)[number];

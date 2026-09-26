@@ -10,7 +10,9 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "npm run prisma:generate && ts-node prisma/seed.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:subscriptions": "jest test/unit/subscription",
+    "typecheck:subscriptions": "tsc -p tsconfig.subscription.json"
     ,"load:smoke": "node load-smoke.js"
   },
   "dependencies": {

@@ -249,3 +249,18 @@ http://localhost:8000/docs
 ---
 
 **Version**: 1.0.0
+
+## Subscriptions & Telegram Stars (SPEC-010)
+| Method | Path | Notes |
+|---|---|---|
+| GET | /api/v1/subscriptions/plans | published plans allowed for the caller's role |
+| GET | /api/v1/subscriptions/me | effectiveTier, entitlements, subscription, paywallEligibility |
+| POST | /api/v1/subscriptions/invoices | `Idempotency-Key` required; body `{ planCode }` only; 201 |
+| POST | /api/v1/subscriptions/me/cancel | `Idempotency-Key` required; → EXPIRING |
+| GET | /api/v1/payments | own payments, `cursor`, `limit` ≤ 100 |
+| GET | /api/v1/admin/payments | ADMIN/SUPER_ADMIN, audited |
+| POST | /api/v1/admin/payments/{paymentId}/refund | ADMIN/SUPER_ADMIN, `Idempotency-Key`, body `{ reason }`; 202 |
+| POST | /api/v1/webhooks/telegram/{webhookSecret} | internal, Telegram only, no JWT (hidden from Swagger) |
+
+Protect Pro features with `@UseGuards(JwtAuthGuard, EntitlementsGuard) @RequireEntitlement('ADVANCED_PROGRESS')` → 403 `ENTITLEMENT_REQUIRED`.
+See `docs/SPEC-010-subscriptions-plan.md`.
