@@ -63,3 +63,34 @@ paywall eligibility; RBAC покупки; сверка pre-checkout; маски�
 - `20260926120000_subscriptions_stars`: id/FK переведены на `UUID` (в БД `User.id` — uuid; с TEXT FK не создавался).
 - Проверено на PostgreSQL 17: вся цепочка из 10 миграций применяется на пустой БД; все 47 моделей читаются реальным Prisma Client без ошибок.
 - `npm run test:subscriptions:db` (нужен `SUBSCRIPTION_DB_TEST_URL`) — 12 интеграционных тестов на реальной БД.
+
+## Этап 8. Повторная приёмка (живой API + реальный PostgreSQL + тестовый двойник Bot API)
+Скрипт: `backend-nest/scripts/sandbox/acceptance.js` (фазы `main` и `expiry` — вторая после рестарта API).
+Окружение: `scripts/sandbox/setup.sh`, `migrate.js`, `fake-bot-api.js`, `prisma-adapter-preload.js` (только sandbox;
+`TELEGRAM_API_BASE_URL` указывает на двойник, реальные invoice/возвраты не выполняются). Итог: **63/63 PASS**
+(59 main + 4 expiry/recovery), плюс 75 unit/service и 12 тестов на реальной БД.
+
+Покрыто: планы (TRAINER_PRO скрыт от не-тренеров), `/me` FREE как вычисляемый; paywall 403 `ENTITLEMENT_REQUIRED`;
+все ошибки invoice (400/403/404/409/422) и Idempotency-Key 16–128; `createInvoiceLink` (XTR, пустой provider_token,
+subscription_period 30 дней); непрозрачный payload, в БД только hash; секрет webhook (404) и секрет-заголовок;
+pre_checkout (сумма/пользователь/валюта/payload/неактивный → ok=false); successful_payment → PAID + ACTIVE +
+entitlements + audit + outbox; дубли по update_id и charge id; продление ровно на period_days; TRAINER_PRO и 422;
+история платежей (только свои, cursor, limit ≤ 100); отмена → EXPIRING; возврат 202 `REFUND_PENDING` → REFUNDED,
+идемпотентность (Telegram вызван 1 раз), пересчёт прав; неактивный пользователь → manual review без доступа;
+метрики; истечение → EXPIRED + outbox `subscription.expired`; recovery RECEIVED-события после рестарта;
+отсутствие токена/секретов/charge ID в логах, audit и outbox.
+
+Найдено и исправлено при приёмке:
+| Проблема | Исправление |
+|---|---|
+| Авторизация Mini App проверяла initData алгоритмом Login Widget (`sha256(token)`) — реальный вход из Telegram невозможен | `HMAC_SHA256("WebAppData", token)` + timing-safe сравнение |
+| `User.status`, `UserProfile.gender/fitnessGoal/experienceLevel/trainingLocation` — TEXT в БД, enum в схеме → вход на чистой БД падал 500 | миграция `20260926130000_user_enum_columns` (идемпотентная) |
+| Rate limit по IP: пользователи за одним NAT делили лимит 10 invoice/мин | `UserThrottlerGuard`: ключ — `sub` из проверенного JWT, иначе IP |
+| Refund отвечал синхронно `REFUNDED` вместо 202 `REFUND_PENDING` | исполнение асинхронно + retry-job `retryPendingRefunds` (каждые 2 мин, до 5 попыток) |
+| Полный `telegram_payment_charge_id` оставался в `telegram_webhook_events` | после терминальной обработки заменяется маской (нужен только для recovery) |
+| Непредвиденные 500 не логировались | `HttpExceptionFilter` логирует тип/сообщение с requestId |
+| Истечение запускалось только через 15 мин после старта | дополнительный запуск через 5 с после старта |
+| `TelegramBotClient` жёстко привязан к api.telegram.org | `TELEGRAM_API_BASE_URL`, `TELEGRAM_TEST_ENV` (тестовая среда Telegram) |
+
+Решение по спецификации: покупка того же плана при **активном автопродлении** → 409 `ACTIVE_SUBSCRIPTION_CONFLICT`
+(Telegram создал бы вторую рекуррентную подписку); после отмены (autoRenew=false) — продление на period_days.

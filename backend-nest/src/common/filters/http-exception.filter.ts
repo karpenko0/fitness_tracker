@@ -1,4 +1,4 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { redactSensitiveData } from '../utils/redact-sensitive-data';
@@ -33,6 +33,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
+    // Непредвиденные ошибки раньше терялись без следа; логируем тип и сообщение (без тела запроса).
+    const err = exception as { name?: string; message?: string; code?: string };
+    new Logger('HttpExceptionFilter').error(JSON.stringify({ requestId, path: request.path, name: err?.name, code: err?.code, message: String(err?.message ?? '').slice(0, 500) }));
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: {
         code: 'INTERNAL_ERROR',

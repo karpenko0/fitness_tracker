@@ -25,7 +25,7 @@ describe('TelegramValidationService', () => {
       .map(([key, value]) => `${key}=${value}`)
       .join('&');
 
-    const secretKey = require('crypto').createHash('sha256').update(botToken).digest();
+    const secretKey = require('crypto').createHmac('sha256', 'WebAppData').update(botToken).digest();
     const hash = require('crypto').createHmac('sha256', secretKey).update('auth_date=' + values.auth_date + '\nuser=' + values.user).digest('hex');
     const initData = `auth_date=${values.auth_date}&user=${encodeURIComponent(values.user)}&hash=${hash}`;
 
@@ -43,7 +43,7 @@ describe('TelegramValidationService', () => {
       auth_date: `${Math.floor(Date.now() / 1000) - 100000}`,
       user: JSON.stringify({ id: 123, first_name: 'Ivan' }),
     };
-    const secretKey = require('crypto').createHash('sha256').update(botToken).digest();
+    const secretKey = require('crypto').createHmac('sha256', 'WebAppData').update(botToken).digest();
     const hash = require('crypto').createHmac('sha256', secretKey).update('auth_date=' + values.auth_date + '\nuser=' + values.user).digest('hex');
     const initData = `auth_date=${values.auth_date}&user=${encodeURIComponent(values.user)}&hash=${hash}`;
 

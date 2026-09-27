@@ -68,7 +68,10 @@ export class HttpTelegramBotClient extends TelegramBotClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      // TELEGRAM_API_BASE_URL — для локального Bot API / фейка в тестах; TELEGRAM_TEST_ENV=true — тестовая среда Telegram (/bot<token>/test/<method>).
+      const base = (this.config.get<string>('TELEGRAM_API_BASE_URL') || 'https://api.telegram.org').replace(/\/+$/, '');
+      const envSegment = this.config.get('TELEGRAM_TEST_ENV') === 'true' ? '/test' : '';
+      const res = await fetch(`${base}/bot${token}${envSegment}/${method}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),

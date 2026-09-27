@@ -341,12 +341,12 @@ describe('SPEC-010 subscriptions & Telegram Stars (service + in-memory DB)', () 
   describe('refunds', () => {
     const admin = () => ({ userId: h.addUser({ roles: ['ADMIN'] }).userId, roles: ['ADMIN'], requestId: 'req_admin' });
 
-    it('admin refund → REFUNDED payment & subscription, access revoked, audit', async () => {
+    it('admin refund → 202 REFUND_PENDING, then REFUNDED payment & subscription, access revoked, audit', async () => {
       const u = h.addUser();
       const { invoice, chargeId } = await h.buy(u);
       const a = admin();
       const res = await h.refunds.requestRefund(a, invoice.paymentId, 'DUPLICATE_CHARGE', key());
-      expect(res).toEqual({ payment: { id: invoice.paymentId, status: 'REFUNDED' } });
+      expect(res).toEqual({ payment: { id: invoice.paymentId, status: 'REFUND_PENDING' } });
       expect(JSON.stringify(res)).not.toContain(chargeId);
       expect(h.telegram.refunds).toEqual([{ userId: String(u.telegramId), chargeId }]);
       expect(h.prisma.tables.payment[0].status).toBe('REFUNDED');
@@ -366,18 +366,22 @@ describe('SPEC-010 subscriptions & Telegram Stars (service + in-memory DB)', () 
       expect(h.telegram.refunds).toHaveLength(1);
     });
 
-    it('Telegram error keeps REFUND_PENDING (not REFUNDED); retry with same key succeeds', async () => {
+    it('Telegram error keeps REFUND_PENDING (not REFUNDED); retry job / new request completes it', async () => {
       const u = h.addUser();
       const { invoice } = await h.buy(u);
       const a = admin();
       const k = key();
       h.telegram.failRefund = 'TELEGRAM_500';
-      await expect(h.refunds.requestRefund(a, invoice.paymentId, 'TECHNICAL_ISSUE', k)).rejects.toMatchObject({ httpStatus: 502, code: 'REFUND_FAILED' });
+      await expect(h.refunds.requestRefund(a, invoice.paymentId, 'TECHNICAL_ISSUE', k)).resolves.toEqual({ payment: { id: invoice.paymentId, status: 'REFUND_PENDING' } });
       expect(h.prisma.tables.payment[0].status).toBe('REFUND_PENDING');
       expect(h.prisma.tables.refundRequest[0]).toMatchObject({ status: 'FAILED', errorCode: 'TELEGRAM_500' });
       expect((await h.subscriptions.getMe(u)).effectiveTier).toBe('PRO');
+      // replay of the same key returns the stored 202 body and does not execute again
+      await expect(h.refunds.requestRefund(a, invoice.paymentId, 'TECHNICAL_ISSUE', k)).resolves.toEqual({ payment: { id: invoice.paymentId, status: 'REFUND_PENDING' } });
+      expect(h.prisma.tables.payment[0].status).toBe('REFUND_PENDING');
       h.telegram.failRefund = null;
-      await h.refunds.requestRefund(a, invoice.paymentId, 'TECHNICAL_ISSUE', k);
+      await expect(h.refunds.retryPendingRefunds()).resolves.toMatchObject({ refunded: 1 });
+      expect(h.telegram.refunds).toHaveLength(1);
       expect(h.prisma.tables.payment[0].status).toBe('REFUNDED');
       expect(h.prisma.tables.refundRequest[0].status).toBe('SUCCEEDED');
     });

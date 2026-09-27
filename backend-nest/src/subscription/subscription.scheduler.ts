@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Optional, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ACCESS_STATUSES, PRODUCT_SCOPE } from './subscription.catalog';
 import { EntitlementsService } from './entitlements.service';
@@ -6,6 +6,7 @@ import { SubscriptionLogger, SubscriptionMetrics } from './subscription.observab
 import { Db, PRISMA } from './subscription.prisma';
 import { writeAudit, writeOutbox } from './subscription.support';
 import { TelegramWebhookService } from './telegram-webhook.service';
+import { RefundService } from './refund.service';
 
 const HOUR = 3_600_000;
 
@@ -21,6 +22,7 @@ export class SubscriptionScheduler implements OnModuleInit, OnModuleDestroy {
     private readonly webhooks: TelegramWebhookService,
     private readonly metrics: SubscriptionMetrics,
     private readonly logger: SubscriptionLogger,
+    @Optional() private readonly refunds?: RefundService,
   ) {}
 
   onModuleInit() {
@@ -28,9 +30,12 @@ export class SubscriptionScheduler implements OnModuleInit, OnModuleDestroy {
     const safe = (name: string, fn: () => Promise<unknown>) => () => fn().catch(e => this.logger.log(`job.${name}.failed`, { errorCode: e?.code ?? 'JOB_ERROR' }, 'error'));
     // Recovery сразу после старта: подхватить RECEIVED/FAILED события.
     setTimeout(safe('recovery', () => this.webhooks.recoverPending()), 10_000).unref?.();
+    // Истечение сразу после старта: доступ не должен «переживать» простой сервиса дольше интервала job.
+    setTimeout(safe('expire', () => this.expireDue()), 5_000).unref?.();
     this.timers.push(setInterval(safe('expire', () => this.expireDue()), 15 * 60_000));
     this.timers.push(setInterval(safe('recovery', () => this.webhooks.recoverPending()), 60_000));
     this.timers.push(setInterval(safe('reconcile', () => this.reconcile()), 5 * 60_000));
+    if (this.refunds) this.timers.push(setInterval(safe('refund-retry', () => this.refunds!.retryPendingRefunds()), 2 * 60_000));
     this.timers.forEach(t => t.unref?.());
   }
 

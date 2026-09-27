@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
-import { createHmac, createHash } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 export interface TelegramInitData {
   auth_date: string;
@@ -77,8 +77,11 @@ export class TelegramValidationService {
       .sort()
       .join('\n');
 
-    const secretKey = createHash('sha256').update(botToken).digest();
-    const computedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    return computedHash === hash;
+    // Telegram Mini Apps: secret_key = HMAC_SHA256(key="WebAppData", msg=bot_token)
+    // (sha256(bot_token) — алгоритм Login Widget, для initData Mini App он не подходит).
+    const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const computed = createHmac('sha256', secretKey).update(dataCheckString).digest();
+    const provided = /^[0-9a-f]{64}$/i.test(hash) ? Buffer.from(hash, 'hex') : Buffer.alloc(0);
+    return provided.length === computed.length && timingSafeEqual(provided, computed);
   }
 }

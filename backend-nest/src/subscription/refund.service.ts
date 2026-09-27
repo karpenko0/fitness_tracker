@@ -61,32 +61,63 @@ export class RefundService {
       });
       this.logger.log('payment.refund.requested', { requestId: actor.requestId, userId: payment.userId, paymentId: payment.id });
 
-      const user = await this.prisma.user.findUnique({ where: { id: payment.userId }, select: { telegramId: true } });
-      try {
-        // Внешний вызов вне транзакции.
-        await this.telegram.refundStarPayment(String(user.telegramId), payment.telegramPaymentChargeId);
-      } catch (e: any) {
-        const code = String(e?.code ?? 'TELEGRAM_ERROR');
-        if (!/ALREADY_REFUNDED/.test(code)) {
-          await this.prisma.$transaction(async (tx: Db) => {
-            await tx.refundRequest.updateMany({ where: { paymentId: payment.id }, data: { status: 'FAILED', errorCode: code.slice(0, 80) } });
-            await writeAudit(tx, { actorUserId: actor.userId, targetUserId: payment.userId, action: 'payment.refund.failed', entityType: 'payment', entityId: payment.id, requestId: actor.requestId, reason, errorCode: code });
-          });
-          this.metrics.inc('payment_refund_total', { result: 'FAILED', reason });
-          this.logger.log('payment.refund.failed', { requestId: actor.requestId, paymentId: payment.id, errorCode: code }, 'error');
-          // ключ не завершён → безопасный повтор тем же Idempotency-Key.
-          throw new SubscriptionError(502, 'REFUND_FAILED', 'Refund could not be completed, retry with the same Idempotency-Key');
-        }
-      }
-
-      await this.processor.finalizeRefund(payment.id, { reason, actorUserId: actor.userId, requestId: actor.requestId });
-      const body = { payment: { id: payment.id, status: 'REFUNDED' } };
+      // §API: 202 Accepted + REFUND_PENDING. Вызов Telegram и пересчёт прав — асинхронно, вне HTTP-запроса
+      // и вне транзакции; при сбое задача остаётся FAILED и добивается retry-job'ом (retryPendingRefunds).
+      const body = { payment: { id: payment.id, status: 'REFUND_PENDING' } };
       await this.idempotency.complete(idem.recordId, 202, body);
+      const run = this.executeRefund(payment.id, { actorUserId: actor.userId, requestId: actor.requestId, reason }).catch(() => undefined);
+      if (this.awaitExecution) await run;
       return body;
     } catch (e) {
-      if (!(e instanceof SubscriptionError && e.code === 'REFUND_FAILED')) await this.idempotency.release(idem.recordId);
+      await this.idempotency.release(idem.recordId);
       throw e;
     }
+  }
+
+  /** Для тестов: дождаться фонового исполнения возврата внутри requestRefund. */
+  awaitExecution = process.env.NODE_ENV === 'test';
+
+  /**
+   * Исполнение возврата: refundStarPayment (идемпотентно для уже возвращённых) → finalizeRefund
+   * (payment REFUNDED, подписка/права пересчитаны, audit, outbox). Безопасно вызывать повторно.
+   */
+  async executeRefund(paymentId: string, ctx: { actorUserId?: string | null; requestId?: string; reason?: string } = {}): Promise<'REFUNDED' | 'FAILED' | 'SKIPPED'> {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment || payment.status !== 'REFUND_PENDING' || !payment.telegramPaymentChargeId) return 'SKIPPED';
+    const reason = ctx.reason ?? payment.refundReason ?? 'OTHER';
+    const user = await this.prisma.user.findUnique({ where: { id: payment.userId }, select: { telegramId: true } });
+    try {
+      await this.telegram.refundStarPayment(String(user.telegramId), payment.telegramPaymentChargeId);
+    } catch (e: any) {
+      const code = String(e?.code ?? 'TELEGRAM_ERROR');
+      if (!/ALREADY_REFUNDED/.test(code)) {
+        await this.prisma.$transaction(async (tx: Db) => {
+          await tx.refundRequest.updateMany({ where: { paymentId: payment.id }, data: { status: 'FAILED', errorCode: code.slice(0, 80) } });
+          await writeAudit(tx, { actorUserId: ctx.actorUserId ?? null, targetUserId: payment.userId, action: 'payment.refund.failed', entityType: 'payment', entityId: payment.id, requestId: ctx.requestId, reason, errorCode: code });
+        });
+        this.metrics.inc('payment_refund_total', { result: 'FAILED', reason });
+        this.logger.log('payment.refund.failed', { requestId: ctx.requestId, paymentId: payment.id, errorCode: code }, 'error');
+        return 'FAILED';
+      }
+    }
+    await this.processor.finalizeRefund(payment.id, { reason, actorUserId: ctx.actorUserId ?? undefined, requestId: ctx.requestId });
+    await this.prisma.refundRequest.updateMany({ where: { paymentId: payment.id }, data: { status: 'SUCCEEDED', errorCode: null } }).catch(() => undefined);
+    return 'REFUNDED';
+  }
+
+  /** Retry-job: добивает зависшие (PENDING > 1 мин) и упавшие (FAILED) возвраты, до maxAttempts попыток. */
+  async retryPendingRefunds(maxAttempts = 5, limit = 50) {
+    const stale = new Date(Date.now() - 60_000);
+    const requests = await this.prisma.refundRequest.findMany({
+      where: { attempts: { lt: maxAttempts }, OR: [{ status: 'FAILED' }, { status: 'PENDING', updatedAt: { lt: stale } }] },
+      take: limit,
+    });
+    let refunded = 0;
+    for (const r of requests) {
+      await this.prisma.refundRequest.update({ where: { id: r.id }, data: { attempts: { increment: 1 }, status: 'PENDING' } });
+      if ((await this.executeRefund(r.paymentId, { actorUserId: r.actorUserId, requestId: 'refund-retry', reason: r.reason }).catch(() => 'FAILED')) === 'REFUNDED') refunded++;
+    }
+    return { scanned: requests.length, refunded };
   }
 
   /** Административное чтение чужой платёжной истории — всегда с аудитом. */

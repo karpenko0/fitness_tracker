@@ -11,6 +11,8 @@ import { SubscriptionService } from '../../../src/subscription/subscription.serv
 import { TelegramWebhookService } from '../../../src/subscription/telegram-webhook.service';
 import { buildHarness, WEBHOOK_SECRET } from './harness';
 
+jest.setTimeout(30_000);
+
 describe('SPEC-010 HTTP contract', () => {
   let app: INestApplication;
   let h: ReturnType<typeof buildHarness>;

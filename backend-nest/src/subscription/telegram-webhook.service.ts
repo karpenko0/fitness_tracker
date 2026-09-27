@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'crypto';
 import { WEBHOOK_MAX_BODY_BYTES } from './subscription.catalog';
-import { sha256, stableHash, verifyPreCheckout } from './subscription.domain';
+import { maskId, sha256, stableHash, verifyPreCheckout } from './subscription.domain';
 import { SubscriptionLogger, SubscriptionMetrics } from './subscription.observability';
 import { Db, isUniqueViolation, PRISMA } from './subscription.prisma';
 import { writeAudit } from './subscription.support';
@@ -126,6 +126,7 @@ export class TelegramWebhookService {
 
     try {
       await this.process(event, requestId);
+      await this.scrubChargeId(event.id);
       this.metrics.observe('webhook_processing_duration_seconds', { event_type: type, result: 'ok' }, (Date.now() - started) / 1000);
       return { httpStatus: 200 };
     } catch (e: any) {
@@ -135,6 +136,20 @@ export class TelegramWebhookService {
       // pre-checkout: Telegram не ретраит, ответ уже отправлен/не отправлен; платёжные события — вернуть 500 для повторной доставки.
       return { httpStatus: type === 'pre_checkout_query' ? 200 : 500 };
     }
+  }
+
+  /**
+   * Минимизация данных: полный telegram_payment_charge_id нужен в событии только до бизнес-фиксации
+   * (для recovery). После терминального статуса он хранится лишь в payments; в событии — маска.
+   */
+  private async scrubChargeId(eventId: string) {
+    const ev = await this.prisma.telegramWebhookEvent.findUnique({ where: { id: eventId } }).catch(() => null);
+    const payload = ev?.payload as any;
+    if (!ev || !payload?.telegramPaymentChargeId || !['PROCESSED', 'IGNORED'].includes(ev.status)) return;
+    if (payload.telegramPaymentChargeId === maskId(payload.telegramPaymentChargeId)) return;
+    await this.prisma.telegramWebhookEvent
+      .update({ where: { id: eventId }, data: { payload: { ...payload, telegramPaymentChargeId: maskId(payload.telegramPaymentChargeId), providerPaymentChargeId: payload.providerPaymentChargeId ? maskId(payload.providerPaymentChargeId) : payload.providerPaymentChargeId } } })
+      .catch(() => undefined);
   }
 
   private async markFailed(eventId: string, errorCode: string) {
@@ -190,6 +205,7 @@ export class TelegramWebhookService {
     for (const event of events) {
       try {
         await this.process(event, 'recovery');
+        await this.scrubChargeId(event.id);
         processed++;
       } catch (e: any) {
         await this.markFailed(event.id, e?.code ?? 'PROCESSING_ERROR');
