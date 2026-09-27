@@ -1,5 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { hasPaidAccess } from '../subscription/access';
 
 @Injectable()
 export class ProgressChartService {
@@ -11,11 +12,7 @@ export class ProgressChartService {
    * Checks if the user has Pro subscription
    */
   private async isProUser(userId: string): Promise<boolean> {
-    const subscription = await this.prisma.subscriptionEntitlement.findUnique({
-      where: { userId },
-    });
-    
-    return subscription?.plan === 'PRO';
+    return hasPaidAccess(this.prisma, userId);
   }
 
   /**
@@ -304,8 +301,7 @@ export class ProgressChartService {
         // Согласно спец: для графика рабочих весов возвращать максимальный и средний рабочий вес
         // Но в прогрессе обычно показывают тренд, поэтому, возможно, среднее
         // Пока делаем среднее значение
-        const sum = validPoints.reduce((sum, p) => sum + p.value!, 0);
-        return sum / validPoints.length;
+        return validPoints.reduce((acc, p) => acc + p.value!, 0) / validPoints.length;
 
       case 'ESTIMATED_1RM':
         // Максимальный 1RM за период
@@ -330,8 +326,7 @@ export class ProgressChartService {
 
       default:
         // По умолчанию берём среднее
-        const sum = validPoints.reduce((sum, p) => sum + p.value!, 0);
-        return sum / validPoints.length;
+        return validPoints.reduce((acc, p) => acc + p.value!, 0) / validPoints.length;
     }
   }
 

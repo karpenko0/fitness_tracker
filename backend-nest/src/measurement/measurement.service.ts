@@ -5,6 +5,7 @@ import {
   UpdateMeasurementDto, 
   MeasurementValueDto 
 } from './dto/measurement.dto';
+import { hasPaidAccess } from '../subscription/access';
 
 @Injectable()
 export class MeasurementService {
@@ -16,11 +17,7 @@ export class MeasurementService {
    * Checks if the user has Pro subscription
    */
   private async isProUser(userId: string): Promise<boolean> {
-    const subscription = await this.prisma.subscriptionEntitlement.findUnique({
-      where: { userId },
-    });
-    
-    return subscription?.plan === 'PRO';
+    return hasPaidAccess(this.prisma, userId);
   }
 
   /**

@@ -4,5 +4,5 @@ import { WorkoutService } from './workout.service';
 import { WorkoutCatalogController } from './workout-catalog.controller';
 import { WorkoutCatalogService } from './workout-catalog.service';
 
-@Module({ controllers: [WorkoutController, WorkoutCatalogController], providers: [WorkoutService, WorkoutCatalogService] })
+@Module({ controllers: [WorkoutController, WorkoutCatalogController], providers: [WorkoutService, WorkoutCatalogService], exports: [WorkoutService] })
 export class WorkoutModule {}

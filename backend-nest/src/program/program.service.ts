@@ -7,6 +7,7 @@ import { ProgramMetricsService } from './program-metrics.service';
 import { ProgramRepository } from './program.repository';
 import { assertEquipment, decodeCursor, encodeCursor, validateActivatableStructure, validateDayMeta, validateExercisePlan, validateProgramMeta } from './program.validation';
 import { AddProgramExerciseDto, CreateProgramDayDto, CreateProgramDto, ProgramQueryDto, ReorderDto, UpdateProgramDto } from './dto/program.dto';
+import { SubscriptionError } from '../subscription/subscription.domain';
 
 @Injectable()
 export class ProgramService {
@@ -296,7 +297,7 @@ export class ProgramService {
       await this.entitlements.assertCanCreateCustomProgram(userId, tx);
       const source = await this.load(programId);
       const entitlement = await this.entitlements.get(userId, tx);
-      if (source.isProOnly && entitlement.plan !== 'PRO') throw new ForbiddenException({ code: 'PRO_FEATURE_REQUIRED', message: 'Pro subscription is required' });
+      if (source.isProOnly && entitlement.plan !== 'PRO') throw await this.entitlements.proRequired(userId, 'PRO_CONTENT', tx);
       if (!['SYSTEM', 'TEMPLATE', 'AUTO_ASSIGNED'].includes(source.type) && source.ownerId !== userId) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Program cannot be copied' });
       const copy = await this.programRepository.create({ owner: { connect: { id: userId } }, type: ProgramType.USER_CUSTOM, status: ProgramStatus.DRAFT, title: `${source.title}`.slice(0, 120), description: source.description, goal: source.goal, level: source.level, location: source.location, goals: source.goals as any, levels: source.levels as any, locations: source.locations as any, durationWeeks: source.durationWeeks, workoutsPerWeek: source.workoutsPerWeek, estimatedWorkoutDurationMinutes: source.estimatedWorkoutDurationMinutes || source.durationMinutes, durationMinutes: source.durationMinutes, requiredEquipment: source.requiredEquipment as any, firstWorkoutTitle: source.firstWorkoutTitle });
       for (const day of source.workouts) {
@@ -319,7 +320,7 @@ export class ProgramService {
       if (program.isProOnly && entitlement.plan !== 'PRO') {
         this.metrics.increment('program_free_limit_reached_total', { limit_type: 'pro_content' });
         this.metrics.event('program.pro_feature_blocked', { userId, programId });
-        throw new ForbiddenException({ code: 'PRO_FEATURE_REQUIRED', message: 'Pro subscription is required' });
+        throw await this.entitlements.proRequired(userId, 'PRO_CONTENT', tx);
       }
       if (program.type === 'USER_CUSTOM' && program.ownerId !== userId) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Cannot activate another user program' });
       if (!['USER_CUSTOM', 'SYSTEM', 'AUTO_ASSIGNED', 'TEMPLATE'].includes(program.type) && program.ownerId !== userId) {
@@ -429,7 +430,7 @@ export class ProgramService {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Cannot access another user program' });
     }
     if (program.type === 'SYSTEM' && program.status !== 'PUBLISHED' && !assignment) throw new NotFoundException({ code: 'PROGRAM_NOT_FOUND', message: 'Program was not found' });
-    if (program.isProOnly && plan !== 'PRO') throw new ForbiddenException({ code: 'PRO_FEATURE_REQUIRED', message: 'Pro subscription is required' });
+    if (program.isProOnly && plan !== 'PRO') throw new SubscriptionError(403, 'ENTITLEMENT_REQUIRED', 'Для этой функции требуется тариф Pro.', { currentPlan: plan, requiredEntitlement: 'PRO_CONTENT' });
   }
 
   private assertReorder(rows: Array<{ id: string }>, items: Array<{ id: string; orderIndex: number }>) {

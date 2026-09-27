@@ -1,5 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { hasPaidAccess } from '../subscription/access';
 
 @Injectable()
 export class ProgressComparisonService {
@@ -11,11 +12,7 @@ export class ProgressComparisonService {
    * Checks if the user has Pro subscription
    */
   private async isProUser(userId: string): Promise<boolean> {
-    const subscription = await this.prisma.subscriptionEntitlement.findUnique({
-      where: { userId },
-    });
-    
-    return subscription?.plan === 'PRO';
+    return hasPaidAccess(this.prisma, userId);
   }
 
   /**

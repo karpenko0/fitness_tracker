@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { hasPaidAccess } from '../subscription/access';
 
 @Injectable()
 export class ExerciseCatalogRepository {
@@ -7,8 +8,7 @@ export class ExerciseCatalogRepository {
 
   async findMany(userId: string, query: any): Promise<any[]> {
     const { q, primaryMuscle, equipment, difficulty, excludeContraindications, cursor, limit = 20 } = query;
-    const entitlement = await this.prisma.subscriptionEntitlement.findUnique({ where: { userId } });
-    const plan = entitlement?.plan || 'FREE';
+    const plan = (await hasPaidAccess(this.prisma, userId)) ? 'PRO' : 'FREE';
     const where: any = {
       active: true,
       AND: [
@@ -30,8 +30,7 @@ export class ExerciseCatalogRepository {
   async findById(exerciseId: string, userId: string): Promise<any | null> {
     const exercise = await this.prisma.exerciseCatalogItem.findUnique({ where: { id: exerciseId }, include: { sourceAlternatives: { include: { alternative: true } }, mediaItems: { orderBy: { position: 'asc' } } } });
     if (!exercise) return null;
-    const entitlement = await this.prisma.subscriptionEntitlement.findUnique({ where: { userId } });
-    const plan = entitlement?.plan || 'FREE';
+    const plan = (await hasPaidAccess(this.prisma, userId)) ? 'PRO' : 'FREE';
     if (exercise.isProOnly && plan !== 'PRO') return null;
     if (!exercise.active || (!exercise.isSystem && exercise.ownerId !== userId)) return null;
     return exercise;

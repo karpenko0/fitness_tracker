@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { LoadRecommendationService } from './load-recommendation.service';
 import { OneRmCalculationService } from './one-rm-calculation.service';
 import { PersonalRecordService } from './personal-record.service';
@@ -18,7 +18,7 @@ import { ProgressionMetricsController } from './metrics.controller';
 import { ProgressAggregateModule } from '../progress-aggregate/progress-aggregate.module';
 
 @Module({
-  imports: [DashboardModule, ProgressAggregateModule],
+  imports: [DashboardModule, forwardRef(() => ProgressAggregateModule)],
   controllers: [ProgressionController, AdminProgressionController, ProgressionConfigController, ProgressionMetricsController],
   providers: [ProgressionService, VolumeCalculationService, OneRmCalculationService, PersonalRecordService, LoadRecommendationService, ProgressionMetricsService, ProgressionEventHandler, ProgressionAuditService, ProgressionHistoryService, ProgressionCacheService, ProgressionConfigService, ProgressionApiMetricsInterceptor],
   exports: [ProgressionService, ProgressionEventHandler, ProgressionMetricsService],

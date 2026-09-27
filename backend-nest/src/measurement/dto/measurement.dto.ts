@@ -1,14 +1,85 @@
-import { IsOptional, IsDateString, IsNumber, Max, Min, IsString, IsInt, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsDateString, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+
+export class CircumferencesCmDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  neck?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  chest?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  waist?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  abdomen?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  hips?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  bicepsLeft?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  bicepsRight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  thighLeft?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  thighRight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  calfLeft?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(10)
+  @Max(300)
+  calfRight?: number;
+}
 
 export class CreateMeasurementDto {
   @IsDateString()
-  measuredAt: string;
+  measuredAt!: string;
 
   @IsString()
-  timezone: string;
+  @MaxLength(64)
+  timezone!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   note?: string;
 
   @IsOptional()
@@ -18,87 +89,24 @@ export class CreateMeasurementDto {
   weightKg?: number;
 
   @IsOptional()
-  circumferencesCm?: {
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    neck?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    chest?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    waist?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    abdomen?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    hips?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    bicepsLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    bicepsRight?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    thighLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    thighRight?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    calfLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    calfRight?: number;
-  };
+  @ValidateNested()
+  @Type(() => CircumferencesCmDto)
+  circumferencesCm?: CircumferencesCmDto;
 }
 
-export class UpdateMeasurementDto extends CreateMeasurementDto {
-  // All fields are optional for update
+export class UpdateMeasurementDto {
   @IsOptional()
   @IsDateString()
   measuredAt?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   timezone?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   note?: string;
 
   @IsOptional()
@@ -108,81 +116,16 @@ export class UpdateMeasurementDto extends CreateMeasurementDto {
   weightKg?: number;
 
   @IsOptional()
-  circumferencesCm?: {
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    neck?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    chest?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    waist?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    abdomen?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    hips?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    bicepsLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    bicepsRight?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    thighLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    thighRight?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    calfLeft?: number;
-
-    @IsOptional()
-    @IsNumber()
-    @Min(10)
-    @Max(300)
-    calfRight?: number;
-  };
+  @ValidateNested()
+  @Type(() => CircumferencesCmDto)
+  circumferencesCm?: CircumferencesCmDto;
 
   @IsInt()
   @Min(1)
-  version: number;
+  version!: number;
 }
 
 export class MeasurementValueDto {
   @IsInt()
-  @Min(0)
-  value: number;
+  value!: number;
 }

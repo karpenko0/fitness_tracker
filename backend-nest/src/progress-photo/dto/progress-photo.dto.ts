@@ -1,4 +1,4 @@
-import { IsOptional, IsDateString, IsString, IsInt, Min, IsIn, IsUrl } from 'class-validator';
+import { IsOptional, IsDateString, IsString, IsInt, Min, Max, IsIn, IsUrl } from 'class-validator';
 
 export class CreateProgressPhotoDto {
   @IsOptional()

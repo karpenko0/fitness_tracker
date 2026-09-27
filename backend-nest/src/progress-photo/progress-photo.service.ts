@@ -4,6 +4,8 @@ import {
   CreateProgressPhotoDto, 
   UpdateProgressPhotoDto 
 } from './dto/progress-photo.dto';
+import { hasPaidAccess } from '../subscription/access';
+import { entitlementRequired } from '../subscription/access';
 
 @Injectable()
 export class ProgressPhotoService {
@@ -15,11 +17,7 @@ export class ProgressPhotoService {
    * Checks if the user has Pro subscription
    */
   private async isProUser(userId: string): Promise<boolean> {
-    const subscription = await this.prisma.subscriptionEntitlement.findUnique({
-      where: { userId },
-    });
-    
-    return subscription?.plan === 'PRO';
+    return hasPaidAccess(this.prisma, userId);
   }
 
   /**
@@ -50,7 +48,7 @@ export class ProgressPhotoService {
         where: { userId },
       });
       if (photoCount >= 5) {
-        throw new Error('Free users are limited to 5 photos total');
+        throw await entitlementRequired(this.prisma, userId, 'PROGRESS_PHOTOS_UNLIMITED', { limit: 5 });
       }
     }
 

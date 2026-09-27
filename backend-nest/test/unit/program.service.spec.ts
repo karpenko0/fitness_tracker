@@ -256,6 +256,6 @@ it('activates a program and creates assignment', async () => {
 it('blocks Pro features for Free users', async () => {
      prisma.starterProgram.findUnique.mockResolvedValue({ id: 'p1', ownerId: 'u', type: 'USER_CUSTOM', status: 'DRAFT', version: 1, workouts: [], isProOnly: true });
      prisma.subscriptionEntitlement.findUnique.mockResolvedValue({ plan: 'FREE' });
-     await expect(service().activate('u', 'p1', 'key')).rejects.toMatchObject({ response: { code: 'PRO_FEATURE_REQUIRED' } });
+     await expect(service().activate('u', 'p1', 'key')).rejects.toMatchObject({ response: { code: 'ENTITLEMENT_REQUIRED' } });
    });
 });

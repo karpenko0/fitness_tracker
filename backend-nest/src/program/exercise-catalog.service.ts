@@ -54,7 +54,7 @@ export class ExerciseCatalogService {
     const exercise = await this.prisma.exerciseCatalogItem.findUnique({ where: { id: exerciseId }, include: { sourceAlternatives: { include: { alternative: true } }, mediaItems: { orderBy: { position: 'asc' } } } });
     if (!exercise) throw new NotFoundException({ code: 'EXERCISE_NOT_FOUND', message: 'Exercise was not found' });
     const entitlement = await this.entitlements.get(userId);
-    if (exercise.isProOnly && entitlement.plan !== 'PRO') throw new ForbiddenException({ code: 'PRO_FEATURE_REQUIRED', message: 'Pro subscription is required' });
+    if (exercise.isProOnly && entitlement.plan !== 'PRO') throw await this.entitlements.proRequired(userId, 'PRO_CONTENT');
     if (!exercise.active || (!exercise.isSystem && exercise.ownerId !== userId)) throw new UnprocessableEntityException({ code: 'EXERCISE_NOT_AVAILABLE', message: 'Exercise is not available' });
     const profile = await this.prisma.userProfile.findUnique({ where: { userId }, select: { limitationTags: true } });
     const overlaps = overlappingContraindications(exercise.contraindications, profile?.limitationTags);
@@ -101,7 +101,7 @@ export class ExerciseCatalogService {
     if (!exercise) throw new NotFoundException({ code: 'EXERCISE_NOT_FOUND', message: 'Exercise was not found' });
     if (!exercise.active || (!exercise.isSystem && exercise.ownerId !== userId)) throw new UnprocessableEntityException({ code: 'EXERCISE_NOT_AVAILABLE', message: 'Exercise is not available' });
     const entitlement = await this.entitlements.get(userId, tx);
-    if (exercise.isProOnly && entitlement.plan !== 'PRO') throw new ForbiddenException({ code: 'PRO_FEATURE_REQUIRED', message: 'Pro subscription is required' });
+    if (exercise.isProOnly && entitlement.plan !== 'PRO') throw await this.entitlements.proRequired(userId, 'PRO_CONTENT', tx);
     return exercise;
   }
 
