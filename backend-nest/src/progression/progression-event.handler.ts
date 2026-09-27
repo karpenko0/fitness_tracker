@@ -45,6 +45,10 @@ export class ProgressionEventHandler {
       this.logger.error(`Workout not found: ${payload.workoutId}`);
       return null;
     }
+    if (!workout.completedAt) {
+      this.logger.warn(`Workout ${payload.workoutId} is not completed; aggregates skipped`);
+      return null;
+    }
 
     // Рассчитываем агрегаты для даты завершения тренировки
     // Используем локальную дату пользователя (пока просто используем completedAt)

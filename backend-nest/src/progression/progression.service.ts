@@ -147,7 +147,9 @@ export class ProgressionService {
     if (workout.status !== WorkoutStatus.COMPLETED || !workout.completedAt) throw new ConflictException({ code: 'WORKOUT_NOT_COMPLETED', message: 'Workout must be completed' });
     if (!force && await tx.workoutCalculation.findUnique({ where: { workoutId } })) return this.getCalculatedSummary(tx, workout.userId, workoutId);
     if (force) await tx.personalRecord.deleteMany({ where: { userId: workout.userId, sourceWorkoutId: workoutId } });
-    const measurement = await tx.measurement.findFirst({ where: { userId: workout.userId, weightKg: { not: null }, measuredAt: { gte: new Date(workout.completedAt.getTime() - 30 * 86_400_000), lte: workout.completedAt } }, orderBy: { measuredAt: 'desc' } });
+    // Вес тела хранится в MeasurementValue(WEIGHT) (Measurement.weightKg удалён миграцией progress_measurements_sync).
+    const weightValue = await tx.measurementValue.findFirst({ where: { metric: 'WEIGHT', value: { not: null }, measurement: { userId: workout.userId, measuredAt: { gte: new Date(workout.completedAt.getTime() - 30 * 86_400_000), lte: workout.completedAt } } }, orderBy: { measurement: { measuredAt: 'desc' } } });
+    const measurement = weightValue ? { weightKg: weightValue.value } : null;
     let totalVolume: number | null = 0, completedSets = 0, skippedSets = 0;
     const allRecords: any[] = [];
     for (const exercise of workout.exercises.filter(item => item.status === 'ACTIVE' && item.kind === 'STRENGTH' && item.catalogExerciseId)) {

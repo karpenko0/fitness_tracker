@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException, Inject } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { 
   CreateProgressPhotoDto, 
@@ -62,7 +62,7 @@ export class ProgressPhotoService {
     });
 
     if (existing) {
-      throw new Error('Progress photo already exists for this date and pose');
+      throw new ConflictException({ code: 'PROGRESS_PHOTO_CONFLICT', message: 'Progress photo already exists for this date and pose' });
     }
 
     // Create the progress photo

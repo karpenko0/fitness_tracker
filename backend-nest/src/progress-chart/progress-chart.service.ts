@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, BadRequestException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { hasPaidAccess } from '../subscription/access';
 
@@ -80,15 +80,15 @@ export class ProgressChartService {
 
       // Если групппировка по дням, возвращаем как есть
       if (options.groupBy === 'DAY') {
-        return this.formatChartResponse(options.metric, options.groupBy, options.from, options.to, dailyAggregates);
+        return this.formatChartResponse(options.metric, options.groupBy, options.from, options.to, dailyAggregates.map(p => ({ date: p.localDate.toISOString().split('T')[0], value: p.value })));
       }
 
       // Иначе агрегируем дневные данные до запрошенной групппировки
-      const aggregatedData = this.aggregateDailyData(dailyAggregates, options.groupBy, options.metric, options.from, options.to);
+      const aggregatedData = this.aggregateDailyData(dailyAggregates, options.groupBy as 'WEEK' | 'MONTH', options.metric, options.from, options.to);
 
       // Проверяем, что количество точек не превышает 365
       if (aggregatedData.length > 365) {
-        throw new Error(`GroupBy ${options.groupBy} would produce ${aggregatedData.length} points, which exceeds the maximum of 365`);
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `GroupBy ${options.groupBy} would produce ${aggregatedData.length} points, which exceeds the maximum of 365` });
       }
 
       return this.formatChartResponse(options.metric, options.groupBy, options.from, options.to, aggregatedData);
@@ -109,16 +109,16 @@ export class ProgressChartService {
   }): void {
     const validMetrics = ['VOLUME', 'WORKING_WEIGHT', 'ESTIMATED_1RM', 'BODY_WEIGHT', 'NECK', 'CHEST', 'WAIST', 'ABDOMEN', 'HIPS', 'BICEPS_LEFT', 'BICEPS_RIGHT', 'THIGH_LEFT', 'THIGH_RIGHT', 'CALF_LEFT', 'CALF_RIGHT'];
     if (!validMetrics.includes(options.metric)) {
-      throw new Error(`Invalid metric: ${options.metric}`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Invalid metric: ${options.metric}` });
     }
 
     const validGroupBy = ['DAY', 'WEEK', 'MONTH'];
     if (!validGroupBy.includes(options.groupBy)) {
-      throw new Error(`Invalid groupBy: ${options.groupBy}`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Invalid groupBy: ${options.groupBy}` });
     }
 
     if (options.from > options.to) {
-      throw new Error('From date cannot be later than to date');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'From date cannot be later than to date' });
     }
 
     // Проверяем максимальный период в зависимости от групппировки
@@ -135,7 +135,7 @@ export class ProgressChartService {
     }
 
     if (diffDays > maxDays) {
-      throw new Error(`Period too long for groupBy ${options.groupBy}. Maximum ${maxDays} days allowed.`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Period too long for groupBy ${options.groupBy}. Maximum ${maxDays} days allowed.` });
     }
   }
 
@@ -183,7 +183,7 @@ export class ProgressChartService {
     // Пока упрощённо предполагаем, что агрегаты уже рассчитаны с правильным muscleMatch
     // TODO: Добавить логику для PRIMARY_ONLY vs PRIMARY_AND_SECONDARY при необходимости
 
-    return this.prisma.progressAggregate.findMany({
+    const rows = await this.prisma.progressAggregate.findMany({
       where,
       orderBy: {
         localDate: 'asc',
@@ -193,6 +193,8 @@ export class ProgressChartService {
         value: true,
       },
     });
+    // Decimal → number: дальше идёт арифметика (сумма/среднее/максимум).
+    return rows.map(r => ({ localDate: r.localDate, value: r.value == null ? null : Number(r.value) }));
   }
 
   /**
@@ -226,10 +228,10 @@ export class ProgressChartService {
 
         const weekKey = startOfWeek.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        if (!weekMap.hasOwnProperty.call(weekMap, weekKey)) {
+        if (!weekMap.has(weekKey)) {
           weekMap.set(weekKey, []);
         }
-        weekMap.get(weekKey).push(point);
+        weekMap.get(weekKey)!.push(point);
       }
 
       // Для каждой недели вычисляем агрегатное значение
@@ -252,10 +254,10 @@ export class ProgressChartService {
         const date = point.localDate;
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
 
-        if (!monthMap.hasOwnProperty.call(monthMap, monthKey)) {
+        if (!monthMap.has(monthKey)) {
           monthMap.set(monthKey, []);
         }
-        monthMap.get(monthKey).push(point);
+        monthMap.get(monthKey)!.push(point);
       }
 
       // Для каждого месяца вычисляем агрегатное значение

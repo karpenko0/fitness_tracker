@@ -1,43 +1,48 @@
-import { IsOptional, IsDateString, IsString, IsInt, Min, Max, IsIn, IsUrl } from 'class-validator';
+import { IsOptional, IsDateString, IsString, IsInt, Min, Max, IsIn, IsUUID, MaxLength } from 'class-validator';
+import { ProgressPhotoPose, ProgressPhotoStatus } from '@prisma/client';
+
+const POSES = ['FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'BACK', 'OTHER'] as const;
+const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+const STATUSES = ['PENDING', 'READY', 'DELETED', 'FAILED'] as const;
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export class CreateProgressPhotoDto {
   @IsOptional()
-  @IsString()
+  @IsUUID()
   measurementId?: string;
 
   @IsDateString()
-  localDate: string;
+  localDate!: string;
 
-  @IsString()
-  @IsIn(['FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'BACK', 'OTHER'])
-  pose: string;
+  @IsIn(POSES)
+  pose!: ProgressPhotoPose;
 
-  @IsString()
-  @IsIn(['image/jpeg', 'image/png', 'image/webp'])
-  mimeType: string;
+  @IsIn(MIME_TYPES)
+  mimeType!: string;
 
   @IsInt()
-  @Min(0)
-  @Max(10 * 1024 * 1024) // 10 MB
-  sizeBytes: number;
+  @Min(1)
+  @Max(MAX_BYTES)
+  sizeBytes!: number;
+
+  /** Приватный ключ в объектном хранилище (обязателен: колонка NOT NULL). */
+  @IsString()
+  @MaxLength(512)
+  storageKey!: string;
 
   @IsOptional()
   @IsString()
-  storageKey: string;
-
-  @IsOptional()
-  @IsString()
+  @MaxLength(512)
   previewStorageKey?: string;
 
   @IsOptional()
-  @IsString()
-  status?: string; // PENDING, READY, DELETED, FAILED
+  @IsIn(STATUSES)
+  status?: ProgressPhotoStatus;
 }
 
-export class UpdateProgressPhotoDto extends CreateProgressPhotoDto {
-  // All fields are optional for update
+export class UpdateProgressPhotoDto {
   @IsOptional()
-  @IsString()
+  @IsUUID()
   measurementId?: string;
 
   @IsOptional()
@@ -45,34 +50,30 @@ export class UpdateProgressPhotoDto extends CreateProgressPhotoDto {
   localDate?: string;
 
   @IsOptional()
-  @IsString()
-  @IsIn(['FRONT', 'SIDE_LEFT', 'SIDE_RIGHT', 'BACK', 'OTHER'])
-  pose?: string;
+  @IsIn(POSES)
+  pose?: ProgressPhotoPose;
 
   @IsOptional()
-  @IsString()
-  @IsIn(['image/jpeg', 'image/png', 'image/webp'])
+  @IsIn(MIME_TYPES)
   mimeType?: string;
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(10 * 1024 * 1024) // 10 MB
+  @Min(1)
+  @Max(MAX_BYTES)
   sizeBytes?: number;
 
   @IsOptional()
   @IsString()
+  @MaxLength(512)
   storageKey?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(512)
   previewStorageKey?: string;
 
   @IsOptional()
-  @IsString()
-  status?: string;
-
-  @IsInt()
-  @Min(1)
-  version: number;
+  @IsIn(STATUSES)
+  status?: ProgressPhotoStatus;
 }

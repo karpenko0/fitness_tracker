@@ -1,15 +1,16 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { ProgressComparisonService } from './progress-comparison.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AuthedRequest } from '../common/http/authed-request';
 
-@Controller('progress-comparison')
+@Controller('api/v1/progress-comparison')
 @UseGuards(AuthGuard('jwt'))
 export class ProgressComparisonController {
   constructor(private progressComparisonService: ProgressComparisonService) {}
 
   @Get()
   async comparePeriods(
-    @Request() req,
+    @Request() req: AuthedRequest,
     @Query('preset') preset: string,
     @Query('metric') metric: string,
     @Query('from') from?: string,

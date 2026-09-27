@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { 
   CreateMeasurementDto, 
@@ -48,7 +48,7 @@ export class MeasurementService {
     const twentyFourHoursLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     
     if (measuredAt > twentyFourHoursLater) {
-      throw new Error('Measurement date cannot be more than 24 hours in the future');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Measurement date cannot be more than 24 hours in the future' });
     }
   }
 
@@ -71,7 +71,7 @@ export class MeasurementService {
     });
 
     if (existing) {
-      throw new Error('Measurement already exists for this date');
+      throw new ConflictException({ code: 'MEASUREMENT_CONFLICT', message: 'Measurement already exists for this date' });
     }
 
     // Check if it's a completely empty measurement (no weight and no circumferences)
@@ -80,7 +80,7 @@ export class MeasurementService {
       (!dto.circumferencesCm || 
        Object.values(dto.circumferencesCm).every(v => v === null || v === undefined))
     ) {
-      throw new Error('Measurement must contain at least weight or one circumference value');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Measurement must contain at least weight or one circumference value' });
     }
 
     // Create the measurement
@@ -190,7 +190,7 @@ export class MeasurementService {
       (!dto.circumferencesCm || 
        Object.values(dto.circumferencesCm).every(v => v === null || v === undefined))
     ) {
-      throw new Error('Measurement must contain at least weight or one circumference value');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Measurement must contain at least weight or one circumference value' });
     }
 
     // Update measurement

@@ -56,6 +56,7 @@ describe('ProgressAggregateService', () => {
     });
 
     it('should handle errors gracefully', async () => {
+      prismaMock.workout.findMany.mockResolvedValue([]);
       prismaMock.measurement.findMany.mockRejectedValue(new Error('Database error'));
 
       const userId = 'test-user';

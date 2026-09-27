@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, BadRequestException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { hasPaidAccess } from '../subscription/access';
 
@@ -135,20 +135,20 @@ export class ProgressComparisonService {
   }): void {
     const validPresets = ['WEEK', 'MONTH', 'CUSTOM'];
     if (!validPresets.includes(options.preset)) {
-      throw new Error(`Invalid preset: ${options.preset}`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Invalid preset: ${options.preset}` });
     }
 
     const validMetrics = ['VOLUME', 'WORKING_WEIGHT', 'ESTIMATED_1RM', 'BODY_WEIGHT', 'NECK', 'CHEST', 'WAIST', 'ABDOMEN', 'HIPS', 'BICEPS_LEFT', 'BICEPS_RIGHT', 'THIGH_LEFT', 'THIGH_RIGHT', 'CALF_LEFT', 'CALF_RIGHT'];
     if (!validMetrics.includes(options.metric)) {
-      throw new Error(`Invalid metric: ${options.metric}`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Invalid metric: ${options.metric}` });
     }
 
     if (options.preset === 'CUSTOM') {
       if (!options.from || !options.to) {
-        throw new Error('From and to dates are required for CUSTOM preset');
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'From and to dates are required for CUSTOM preset' });
       }
       if (options.from > options.to) {
-        throw new Error('From date cannot be later than to date');
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'From date cannot be later than to date' });
       }
     }
   }
@@ -189,12 +189,12 @@ export class ProgressComparisonService {
       currentTo = endOfMonth;
     } else if (options.preset === 'CUSTOM') {
       if (!options.from || !options.to) {
-        throw new Error('From and to dates are required for CUSTOM preset');
+        throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'From and to dates are required for CUSTOM preset' });
       }
       currentFrom = new Date(options.from);
       currentTo = new Date(options.to);
     } else {
-      throw new Error(`Unsupported preset: ${options.preset}`);
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', message: `Unsupported preset: ${options.preset}` });
     }
 
     // Вычисляем длину периода в днях
@@ -203,7 +203,7 @@ export class ProgressComparisonService {
 
     // Вычисляем предыдущий период такой же длины, сразу предшествующий текущему
     const previousTo = new Date(currentFrom);
-    previousTo.setMilliseconds(previousTo.getMilliseconds - 1); // Момент перед началом текущего периода
+    previousTo.setMilliseconds(previousTo.getMilliseconds() - 1); // Момент перед началом текущего периода
     const previousFrom = new Date(previousTo);
     previousFrom.setTime(previousFrom.getTime() - periodLengthMs);
 
@@ -279,7 +279,7 @@ export class ProgressComparisonService {
       where.dimensionCode = null;
     }
 
-    return this.prisma.progressAggregate.findMany({
+    const rows = await this.prisma.progressAggregate.findMany({
       where,
       orderBy: {
         localDate: 'asc',
@@ -289,6 +289,8 @@ export class ProgressComparisonService {
         value: true,
       },
     });
+    // Decimal → number: дальше идёт арифметика (сумма/среднее/максимум).
+    return rows.map(r => ({ localDate: r.localDate, value: r.value == null ? null : Number(r.value) }));
   }
 
   /**
