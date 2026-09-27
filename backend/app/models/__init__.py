@@ -7,6 +7,7 @@ from .product_feature import ProductFeature, ReleaseStage
 from .plan import Plan, PlanStatus
 from .audit_log import AuditLog
 from .idempotency_key import IdempotencyKey
+from ..habits.models import Habit, HabitTask, HabitReminder, NotificationDelivery
 
 __all__ = [
     "Base",
@@ -18,4 +19,8 @@ __all__ = [
     "PlanStatus",
     "AuditLog",
     "IdempotencyKey",
+    "Habit",
+    "HabitTask",
+    "HabitReminder",
+    "NotificationDelivery"
 ]

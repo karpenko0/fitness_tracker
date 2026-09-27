@@ -10,8 +10,11 @@ from app.config import get_settings
 from app.api.routes import product
 from app.api.routes import auth
 from app.api.routes import user
+from app.api.routes import habits
+from app.api.routes import telegram
 from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.scheduler import start_scheduler, shutdown_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,8 @@ app.add_middleware(
 app.include_router(product, prefix=settings.API_V1_PREFIX)
 app.include_router(auth, prefix=settings.API_V1_PREFIX)
 app.include_router(user, prefix=settings.API_V1_PREFIX)
+app.include_router(habits, prefix=settings.API_V1_PREFIX)
+app.include_router(telegram, prefix=settings.API_V1_PREFIX)
 
 # Rate limiting middleware
 app.add_middleware(RateLimitMiddleware)
@@ -44,15 +49,30 @@ app.add_middleware(RateLimitMiddleware)
 # Idempotency middleware
 app.add_middleware(IdempotencyMiddleware)
 
+
+@app.on_event("startup")
+async def startup_event():
+    """Start application resources."""
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown application resources."""
+    shutdown_scheduler()
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {"message": "Fitness Tracker API", "version": "1.0.0"}
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
 
 @app.get("/api/v1")
 async def api_v1_info():
@@ -62,11 +82,14 @@ async def api_v1_info():
         "status": "running",
         "endpoints": {
             "auth": "/api/v1/auth",
+            "habits": "/api/v1/habits",
             "products": "/api/v1/products",
             "plans": "/api/v1/plans",
-            "config": "/api/v1/product/config"
+            "config": "/api/v1/product/config",
+            "telegram": "/api/v1/telegram"
         }
     }
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):

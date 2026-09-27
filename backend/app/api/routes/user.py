@@ -1,11 +1,13 @@
-"""User profile and admin user routes."""
+"""
+User profile and admin user routes.
+"""
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import SuccessResponse
-from app.schemas.user import UserDetailResponse, UserUpdate
+from app.schemas.user import UserDetailResponse, UserUpdate, TelegramBindTokenResponse
 from app.middleware.rbac import get_current_user, require_role
 from app.models import User
 from app.services.audit import record_audit
@@ -60,6 +62,33 @@ def update_current_user(
     return SuccessResponse(data=user_to_dict(user))
 
 
+@router.post("/me/telegram-bind-token", response_model=SuccessResponse)
+def generate_telegram_bind_token(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Generate a one-time token for binding Telegram account."""
+    # Generate the token
+    plain_token = user.generate_telegram_bind_token()
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Record audit
+    record_audit(
+        action="generate_telegram_bind_token",
+        user_id=str(user.id),
+        entity_type="user",
+        entity_id=str(user.id),
+        changes={"token_generated": True, "expires_at": user.telegram_bind_token_expires_at.isoformat()},
+    )
+    
+    return SuccessResponse(data=TelegramBindTokenResponse(
+        token=plain_token,
+        expires_in=600  # 10 minutes in seconds
+    ))
+
+
 @router.get("/", response_model=SuccessResponse)
 def list_users(db: Session = Depends(get_db), user: User = Depends(require_role("admin"))):
     users = db.query(User).all()
@@ -97,3 +126,8 @@ def delete_user(user_id: UUID, db: Session = Depends(get_db), user: User = Depen
     )
 
     return SuccessResponse(data={"deleted": True, "id": str(user_id)})
+
+
+# We'll add a route to bind Telegram chat ID (could be done via the bot, but we'll also provide an API for completeness)
+# However, the binding is done via the Telegram bot, so we don't need an API route for that.
+# Instead, we'll handle the binding in the Telegram webhook when the user sends the token.

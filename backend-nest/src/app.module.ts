@@ -4,10 +4,12 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { HabitModule } from './habit/habit.module';
+import { TaskModule } from './task/task.module';
 import { PrismaModule } from './prisma.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { WorkoutModule } from './workout/workout.module;
+import { WorkoutModule } from './workout/workout.module';
 import { ProgramModule } from './program/program.module';
 import { ProgressionModule } from './progression/progression.module';
 import { MeasurementModule } from './measurement/measurement.module';
@@ -28,6 +30,8 @@ import { ProgressionApiMetricsInterceptor } from './progression/progression-audi
     PrismaModule,
     AuthModule,
     UserModule,
+    HabitModule,
+    TaskModule,
     OnboardingModule,
     DashboardModule,
     WorkoutModule,
@@ -37,6 +41,7 @@ import { ProgressionApiMetricsInterceptor } from './progression/progression-audi
     ProgressPhotoModule,
     ProgressChartModule,
     ProgressComparisonModule,
+    ProgressionApiMetricsInterceptor,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: ProgressionApiMetricsInterceptor }],
 })
