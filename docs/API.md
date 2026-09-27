@@ -259,7 +259,7 @@ http://localhost:8000/docs
 | POST | /api/v1/subscriptions/me/cancel | `Idempotency-Key` required; → EXPIRING |
 | GET | /api/v1/payments | own payments, `cursor`, `limit` ≤ 100 |
 | GET | /api/v1/admin/payments | ADMIN/SUPER_ADMIN, audited |
-| POST | /api/v1/admin/payments/{paymentId}/refund | ADMIN/SUPER_ADMIN, `Idempotency-Key`, body `{ reason }`; 202 |
+| POST | /api/v1/admin/payments/{paymentId}/refund | ADMIN/SUPER_ADMIN, `Idempotency-Key`, body `{ reason }` (DUPLICATE_CHARGE, TECHNICAL_ISSUE, USER_REQUEST, FRAUD, OTHER); 202 `{ payment: { id, status: "REFUND_PENDING" } }`, возврат исполняется асинхронно (retry-job), повтор идемпотентен |
 | POST | /api/v1/webhooks/telegram/{webhookSecret} | internal, Telegram only, no JWT (hidden from Swagger) |
 
 Protect Pro features with `@UseGuards(JwtAuthGuard, EntitlementsGuard) @RequireEntitlement('ADVANCED_PROGRESS')` → 403 `ENTITLEMENT_REQUIRED`.
