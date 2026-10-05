@@ -119,3 +119,6 @@ docker-compose.override.yml
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Admin panel runtime export files (SPEC-011, one-time downloads)
+backend/exports/

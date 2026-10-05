@@ -20,6 +20,7 @@ from app.habits.schemas import (
     TaskSkipUpdate,
     SkipReason
 )
+from app.habits import schemas
 from app.habits.services import (
     create_habit,
     get_habits,
@@ -313,7 +314,7 @@ def test_get_or_create_today_task(db_session: Session):
     assert task1 is not None
     assert task1.habit_id == habit.id
     assert task1.user_id == user.id
-    assert task1.local_date.date() == date.today()
+    assert task1.local_date == date.today()
     assert task1.status == "PENDING"
     assert task1.current_value is None
     assert task1.version == 1
@@ -352,29 +353,32 @@ def test_update_task_progress(db_session: Session):
     task = get_or_create_today_task(db_session, user, habit)
     
     # Test ADD action
+    initial_version = task.version
     update_in = TaskProgressUpdate(version=task.version, action="ADD", value=500)
     updated_task = update_task_progress(db_session, user, task.id, update_in)
     
     assert updated_task.current_value == 500
     assert updated_task.status == "PENDING"  # not yet completed
-    assert updated_task.version == task.version + 1
+    assert updated_task.version == initial_version + 1
     
     # Test another ADD
+    second_version = updated_task.version
     update_in2 = TaskProgressUpdate(version=updated_task.version, action="ADD", value=1000)
     updated_task2 = update_task_progress(db_session, user, task.id, update_in2)
     
     assert updated_task2.current_value == 1500
     assert updated_task2.status == "PENDING"
-    assert updated_task2.version == updated_task.version + 1
+    assert updated_task2.version == second_version + 1
     
     # Test SET action
+    third_version = updated_task2.version
     update_in3 = TaskProgressUpdate(version=updated_task2.version, action="SET", value=2000)
     updated_task3 = update_task_progress(db_session, user, task.id, update_in3)
     
     assert updated_task3.current_value == 2000
     assert updated_task3.status == "COMPLETED"  # goal reached
     assert updated_task3.completed_at is not None
-    assert updated_task3.version == updated_task2.version + 1
+    assert updated_task3.version == third_version + 1
     
     # Test that we cannot update a completed task
     with pytest.raises(ValueError, match="Task cannot be updated"):
@@ -407,12 +411,13 @@ def test_complete_task(db_session: Session):
     task = get_or_create_today_task(db_session, user, habit)
     
     # Complete the task
+    initial_version = task.version
     update_in = TaskCompleteUpdate(version=task.version)
     completed_task = complete_task(db_session, user, task.id, update_in)
     
     assert completed_task.status == "COMPLETED"
     assert completed_task.completed_at is not None
-    assert completed_task.version == task.version + 1
+    assert completed_task.version == initial_version + 1
     
     # Check that the habit's streak was updated
     updated_habit = get_habit(db_session, user, habit.id)
@@ -447,13 +452,14 @@ def test_skip_task(db_session: Session):
     task = get_or_create_today_task(db_session, user, habit)
     
     # Skip the task
+    initial_version = task.version
     update_in = TaskSkipUpdate(version=task.version, reason=SkipReason.USER_DECISION)
     skipped_task = skip_task(db_session, user, task.id, update_in)
     
     assert skipped_task.status == "SKIPPED"
     assert skipped_task.skipped_at is not None
     assert skipped_task.skip_reason == SkipReason.USER_DECISION
-    assert skipped_task.version == task.version + 1
+    assert skipped_task.version == initial_version + 1
     
     # Check that the habit's streak was reset (since skipping breaks streak)
     updated_habit = get_habit(db_session, user, habit.id)
@@ -679,11 +685,11 @@ def test_get_today_tasks(db_session: Session):
     task_id = task_for_habit1["taskId"]
     
     # Update the task to completed
-    from app.schemas.habits import TaskCompleteUpdate
+    from uuid import UUID as _UUID
     # We need to get the task to have its version
-    task_obj = db_session.query(models.HabitTask).filter(models.HabitTask.id == task_id).first()
+    task_obj = db_session.query(HabitTask).filter(HabitTask.id == _UUID(task_id)).first()
     update_in = TaskCompleteUpdate(version=task_obj.version)
-    completed_task = complete_task(db_session, user, task_id, update_in)
+    completed_task = complete_task(db_session, user, _UUID(task_id), update_in)
     
     # Get today's tasks again
     today_data2 = get_today_tasks(db_session, user)
@@ -728,9 +734,9 @@ def test_get_habit_history(db_session: Session):
     )
     habit = create_habit(db_session, user, habit_in)
     
-# Create tasks for the past 5 days (including today) with different statuses
-        from app.habits.models import HabitTask
-    
+    # Create tasks for the past 5 days (including today) with different statuses
+    from app.habits.models import HabitTask
+
     base_date = date.today()
     for i in range(5):
         task_date = base_date - timedelta(days=i)

@@ -1,7 +1,7 @@
 """
 Habit models
 """
-from sqlalchemy import Column, String, Boolean, UUID, Enum, DateTime, Numeric, ForeignKey, Index, UniqueConstraint, Integer, JSON
+from sqlalchemy import Column, String, Boolean, UUID, Enum, Date, DateTime, Numeric, ForeignKey, Index, UniqueConstraint, Integer, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID as UUID_PG
 import uuid
@@ -88,12 +88,13 @@ class Habit(Base, BaseModel):
     unit = Column(String(50), nullable=True)  # nullable for BOOLEAN
     schedule_type = Column(Enum(ScheduleType), nullable=False)
     weekdays = Column(JSON, nullable=True)  # list of integers [1,7]
-    scheduled_local_date = Column(DateTime(timezone=False), nullable=True)  # DATE for ONE_TIME
+    scheduled_local_date = Column(Date, nullable=True)  # for ONE_TIME
     timezone = Column(String(64), nullable=False)  # IANA timezone
     status = Column(Enum(HabitStatus), default=HabitStatus.ACTIVE, nullable=False)
     current_streak = Column(Integer, default=0, nullable=False)
     best_streak = Column(Integer, default=0, nullable=False)
-    last_completed_local_date = Column(DateTime(timezone=False), nullable=True)  # DATE
+    last_completed_local_date = Column(Date, nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
     version = Column(Integer, default=1, nullable=False)
 
     # Relationships
@@ -115,7 +116,7 @@ class HabitTask(Base, BaseModel):
     id = Column(UUID_PG(as_uuid=True), primary_key=True, default=uuid.uuid4)
     habit_id = Column(UUID_PG(as_uuid=True), ForeignKey("habits.id"), nullable=False, index=True)
     user_id = Column(UUID_PG(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    local_date = Column(DateTime(timezone=False), nullable=False)  # DATE
+    local_date = Column(Date, nullable=False)
     timezone = Column(String(64), nullable=False)  # IANA timezone at the time of creation
     target_value = Column(Numeric(precision=10, scale=2), nullable=True)  # snapshot of goal
     current_value = Column(Numeric(precision=10, scale=2), nullable=True)

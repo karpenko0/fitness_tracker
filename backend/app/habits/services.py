@@ -84,21 +84,23 @@ def update_task_progress(db: Session, user: User, task_id: UUID, payload: schema
     # Check if the task is for today (local date)
     user_tz = get_user_timezone(user)
     today_local = utc_to_local_date(datetime.now(pytz.UTC), user_tz)
-    if task.local_date.date() != today_local:
+    if task.local_date != today_local:
         raise ValueError("Can only update tasks for today")
     
     # Check version for optimistic locking
     if task.version != payload.version:
         raise ValueError("Task version mismatch")
     
-    # Update the task
+    # Update the task (convert to Decimal to match the Numeric column)
+    from decimal import Decimal
+    value = Decimal(str(payload.value))
     if payload.action == "ADD":
         if task.current_value is None:
-            task.current_value = payload.value
+            task.current_value = value
         else:
-            task.current_value += payload.value
+            task.current_value += value
     elif payload.action == "SET":
-        task.current_value = payload.value
+        task.current_value = value
     
     # Check if the goal is reached
     if task.current_value is not None and task.target_value is not None:
@@ -114,7 +116,9 @@ def update_task_progress(db: Session, user: User, task_id: UUID, payload: schema
     
     # Update the habit's streak if the task is completed
     if task.status == models.TaskStatus.COMPLETED:
-        update_streak(db, habit)
+        habit = db.query(models.Habit).filter(models.Habit.id == task.habit_id).first()
+        if habit:
+            update_streak(db, habit)
     
     return task
 
@@ -135,7 +139,7 @@ def complete_task(db: Session, user: User, task_id: UUID, payload: schemas.TaskC
     # Check if the task is for today (local date)
     user_tz = get_user_timezone(user)
     today_local = utc_to_local_date(datetime.now(pytz.UTC), user_tz)
-    if task.local_date.date() != today_local:
+    if task.local_date != today_local:
         raise ValueError("Can only complete tasks for today")
     
     # Check version for optimistic locking
@@ -173,7 +177,7 @@ def skip_task(db: Session, user: User, task_id: UUID, payload: schemas.TaskSkipU
     # Check if the task is for today (local date)
     user_tz = get_user_timezone(user)
     today_local = utc_to_local_date(datetime.now(pytz.UTC), user_tz)
-    if task.local_date.date() != today_local:
+    if task.local_date != today_local:
         raise ValueError("Can only skip tasks for today")
     
     # Check version for optimistic locking
@@ -476,6 +480,20 @@ def update_habit(db: Session, user: User, habit_id: UUID, habit_in: schemas.Habi
     return habit
 
 
+def pause_habit(db: Session, user: User, habit_id: UUID) -> models.Habit:
+    """Pause a habit"""
+    habit = get_habit(db, user, habit_id)
+    if not habit:
+        raise ValueError("Habit not found")
+    if habit.status != models.HabitStatus.ACTIVE:
+        raise ValueError("Only active habits can be paused")
+    habit.status = models.HabitStatus.PAUSED
+    habit.version += 1
+    db.commit()
+    db.refresh(habit)
+    return habit
+
+
 def resume_habit(db: Session, user: User, habit_id: UUID) -> models.Habit:
     """Resume a habit"""
     habit = get_habit(db, user, habit_id)
@@ -517,7 +535,7 @@ def get_today_tasks(db: Session, user: User, x_timezone: Optional[str] = None) -
     else:
         tz = get_user_timezone(user)
     
-today_local = utc_to_local_date(datetime.now(pytz.UTC), tz)
+    today_local = utc_to_local_date(datetime.now(pytz.UTC), tz)
     
     # Get habits for the user that are active and have a task for today
     # We'll get all active habits and then get or create today's task for each
@@ -532,49 +550,50 @@ today_local = utc_to_local_date(datetime.now(pytz.UTC), tz)
     in_progress = 0
     pending = 0
     
-    for habitat in habitats:
-        task = get_or_create_today_task(db, user, habitat)
+    for habit in habits:
+        task = get_or_create_today_task(db, user, habit)
         total += 1
         
-        # Compute progress percent if applicable
+        # Compute progress percent if applicable (not for completed or boolean tasks)
         progress_percent = None
-        if habitat.goal_type != models.GoalType.BOOLEAN and task.target_value is not None and task.target_value != 0:
-            if task.current_value is not None:
-                progress_percent = int((float(task.current_value) / float(task.target_value)) * 100)
-            else:
-                progress_percent = 0
+        if task.status != models.TaskStatus.COMPLETED:
+            if habit.goal_type != models.GoalType.BOOLEAN and task.target_value is not None and task.target_value != 0:
+                if task.current_value is not None:
+                    progress_percent = int((float(task.current_value) / float(task.target_value)) * 100)
+                else:
+                    progress_percent = 0
         
         # Determine status string for response
         status_str = task.status.value if hasattr(task.status, 'value') else str(task.status)
         
         task_dict = {
             "taskId": str(task.id),
-            "habitatId": str(habitat.id),
-            "title": habitat.title,
-            "type": habitat.type.value if hasattr(habitat.type, 'value') else str(habitat.type),
-            "goalType": habitat.goal_type.value if hasattr(habitat.goal_type, 'value') else str(habitat.goal_type),
-            "targetValue": float(habitat.target_value) if habitat.target_value is not None else None,
+            "habitId": str(habit.id),
+            "title": habit.title,
+            "type": habit.type.value if hasattr(habit.type, 'value') else str(habit.type),
+            "goalType": habit.goal_type.value if hasattr(habit.goal_type, 'value') else str(habit.goal_type),
+            "targetValue": float(habit.target_value) if habit.target_value is not None else None,
             "currentValue": float(task.current_value) if task.current_value is not None else None,
-            "unit": habitat.unit.value if hasattr(habitat.unit, 'value') else str(habitat.unit) if habitat.unit else None,
+            "unit": habit.unit.value if hasattr(habit.unit, 'value') else str(habit.unit) if habit.unit else None,
             "status": status_str,
             "progressPercent": progress_percent,
-            "currentStreak": habitat.current_streak,
+            "currentStreak": habit.current_streak,
             # We'll add reminder info later if needed
             # "reminder": {...},
-            # "deepLink": f"/habitats/task_{task.id}"
+            # "deepLink": f"/habits/task_{task.id}"
         }
         tasks_list.append(task_dict)
         
-# Update counters
-    if task.status == models.HabitStatus.COMPLETED:
-        completed += 1
-    elif task.status == models.HabitStatus.IN_PROGRESS:
-        in_progress += 1
-    elif task.status == models.HabitStatus.PENDING:
-        pending += 1
-# Note: SKIPPED and EXPIRED are not counted in today's tasks? They are still tasks for today.
-    # But the spec's example summary only includes total, completed, inProgress, pending.
-    # So we'll not count SKIPPED and EXPIRED in those counters.
+        # Update counters
+        if task.status == models.TaskStatus.COMPLETED:
+            completed += 1
+        elif task.status == models.TaskStatus.IN_PROGRESS:
+            in_progress += 1
+        elif task.status == models.TaskStatus.PENDING:
+            pending += 1
+        # Note: SKIPPED and EXPIRED are not counted in today's tasks? They are still tasks for today.
+        # But the spec's example summary only includes total, completed, inProgress, pending.
+        # So we'll not count SKIPPED and EXPIRED in those counters.
     
     summary = {
         "total": total,
@@ -591,19 +610,19 @@ today_local = utc_to_local_date(datetime.now(pytz.UTC), tz)
     }
 
 
-def get_habit_history(db: Session, user: User, habitat_id: UUID, from_date: Optional[date] = None, to_date: Optional[date] = None, limit: int = 30) -> List[models.HabitatTask]:
-    """Get history of tasks for a habitat"""
-    query = db.query(models.HabitatTask).filter(
-        models.HabitatTask.habitat_id == habitat_id,
-        models.HabitatTask.user_id == user.id
+def get_habit_history(db: Session, user: User, habit_id: UUID, from_date: Optional[date] = None, to_date: Optional[date] = None, limit: int = 30) -> List[models.HabitTask]:
+    """Get history of tasks for a habit"""
+    query = db.query(models.HabitTask).filter(
+        models.HabitTask.habit_id == habit_id,
+        models.HabitTask.user_id == user.id
     )
     
     if from_date:
-        query = query.filter(models.HabitatTask.local_date >= from_date)
+        query = query.filter(models.HabitTask.local_date >= from_date)
     if to_date:
-        query = query.filter(models.HabitatTask.local_date <= to_date)
+        query = query.filter(models.HabitTask.local_date <= to_date)
     
-    tasks = query.order_by(models.HabitatTask.local_date.desc()).limit(limit).all()
+    tasks = query.order_by(models.HabitTask.local_date.desc()).limit(limit).all()
     return tasks
 
 

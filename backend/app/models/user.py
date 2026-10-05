@@ -16,6 +16,18 @@ class UserRole(str, enum.Enum):
     USER = "user"
     CONTENT_MANAGER = "content_manager"
     ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+
+
+ADMIN_ROLES = (UserRole.CONTENT_MANAGER.value, UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value)
+
+# Role hierarchy used to enforce "нельзя назначить роль выше собственной" (SPEC-011 6.3)
+ROLE_RANK = {
+    UserRole.USER.value: 0,
+    UserRole.CONTENT_MANAGER.value: 1,
+    UserRole.ADMIN.value: 2,
+    UserRole.SUPER_ADMIN.value: 3,
+}
 
 
 class User(Base, BaseModel):
@@ -32,11 +44,17 @@ class User(Base, BaseModel):
     timezone = Column(String(50), default="UTC", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     # Telegram fields
-    telegram_chat_id = Column(String(255), nullable=True, unique=True)  # Telegram chat ID can be used as a unique identifier
+    # Telegram chat ID can be used as a unique identifier (searched by admin user search)
+    telegram_chat_id = Column(String(255), nullable=True, unique=True, index=True)
     telegram_notifications_enabled = Column(Boolean, default=False, nullable=False)
     # Telegram binding fields
     telegram_bind_token = Column(String(255), nullable=True)  # hashed token for binding
     telegram_bind_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Admin panel fields (SPEC-011)
+    role_source = Column(String(100), default="system", nullable=False)  # system | admin:<user_id> | registration
+    mfa_required = Column(Boolean, default=False, nullable=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)  # soft delete
 
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")

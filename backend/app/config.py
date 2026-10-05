@@ -43,6 +43,30 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # Admin panel (SPEC-011)
+    ADMIN_SESSION_IDLE_MINUTES: int = 30
+    ADMIN_TOKEN_HOURS: int = 8
+    ADMIN_MFA_ENABLED: bool = False
+    # Dev-only: fixed code accepted when ADMIN_MFA_ENABLED and ENVIRONMENT != production.
+    # In production without a configured MFA verifier, MFA logins fail closed (501).
+    ADMIN_MFA_DEV_CODE: str = ""
+    ADMIN_RATE_LIMIT_REQUESTS: int = 60
+    ADMIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    ADMIN_EXPORT_RATE_LIMIT_REQUESTS: int = 10
+    ADMIN_EXPORT_RATE_LIMIT_WINDOW_SECONDS: int = 3600
+    ADMIN_EXPORT_TTL_MINUTES: int = 15
+    ADMIN_EXPORT_MAX_ROWS: int = 100000
+    ADMIN_MFA_WINDOW_SECONDS: int = 300
+    ADMIN_MFA_MAX_ATTEMPTS: int = 5
+    ANALYTICS_MIN_SEGMENT_SIZE: int = 5
+    MEDIA_MAX_IMAGE_SIZE: int = 10 * 1024 * 1024
+    MEDIA_MAX_VIDEO_SIZE: int = 50 * 1024 * 1024
+    MEDIA_STORAGE_DIR: str = "storage/media"
+    MEDIA_PRESALT: str = "media-token-salt-change-in-production"
+    AUDIT_IP_SALT: str = "ip-hash-salt-change-in-production"
+    APPROVAL_GATE_ENABLED: bool = True
+    DEMO_DATA_SEED: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = True
