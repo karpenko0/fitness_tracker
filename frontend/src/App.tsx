@@ -5,10 +5,11 @@ import Login from './pages/Login'
 import Plans from './pages/Plans'
 import Onboarding from './pages/Onboarding'
 import WorkoutStart from './pages/WorkoutStart'
+import AdminApp from './admin/AdminApp'
 
-export default function App() {
+function ClientApp() {
   return (
-    <BrowserRouter>
+    <>
       <header>
         <nav>
           <Link to="/">Dashboard</Link> | <Link to="/plans">Plans</Link> | <Link to="/login">Login</Link>
@@ -24,6 +25,17 @@ export default function App() {
           <Route path="/workouts/:workoutId" element={<WorkoutStart />} />
         </Routes>
       </main>
+    </>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/admin/*" element={<AdminApp />} />
+        <Route path="/*" element={<ClientApp />} />
+      </Routes>
     </BrowserRouter>
   )
 }

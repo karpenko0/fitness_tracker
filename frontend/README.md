@@ -54,6 +54,67 @@ npm run lint
 npm run format
 ```
 
+## 🛡️ Админ-панель (SPEC-011)
+
+UI админ-панели живёт в этом же приложении (не отдельное приложение): роуты
+`/admin/*`, код в `src/admin/`, API-клиент — общие сервисы `src/services/api.ts`
+(база `/api/v1`).
+
+### Запуск
+
+Нужен запущенный backend (по умолчанию `http://localhost:8000`): Vite dev-сервер
+проксирует `/api` на бекенд, браузеру достаточно относительных URL.
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm test           # vitest (в т.ч. тесты src/admin)
+npm run build      # production-сборка (vite)
+```
+
+Локальный seed с тремя ролями:
+
+```bash
+cd ../backend && python -m alembic upgrade head
+python scripts/seed_admin.py --with-demo-data
+```
+
+| Учётка                | Роль              | Что видит |
+|-----------------------|-------------------|-----------|
+| `root@fittrack.demo`  | SUPER_ADMIN       | Все разделы + пользователи/роли, биллинг, рассылки (пароль `Demo123!`) |
+| `admin@fittrack.demo` | ADMIN             | Все разделы, кроме изменения ролей до SUPER_ADMIN и массовых рассылок |
+| `content@fittrack.demo` | CONTENT_MANAGER | Только контент/медиа/привычки/челленджи/уведомления; пользователи и биллинг → 403 |
+
+### Ключевые экраны
+
+- `/admin/login` — вход (email + пароль, опционально TOTP при включённом MFA).
+- `/admin` (дашборд) — виджеты (не PII; «Нет данных» при малой сегментации).
+- `/admin/users` — поиск, блокировка/разблокировка с причиной ≥10 символов, смена роли
+  (не выше своей), массовые операции (превью → подтверждение → исполнение).
+- `/admin/exercises`, `/admin/programs` — черновики, предпубликационные проверки,
+  публикация с версией и reason, rollback, история версий.
+- `/admin/billing` (+ `/admin/billing/subscriptions|payments|webhooks`) — подписки,
+  платежи (статусы меняет только вебхук), replay вебхуков (идемпотентный);
+  ручное изменение статусов недоступно.
+- `/admin/promos` — промокоды (в БД только hash кода, не plaintext), лимиты
+  с аудитом, redeem транзакционный.
+- `/admin/notifications` — шаблоны и кампании (превью → подтверждение).
+- `/admin/challenges`, `/admin/habits` — контентные справочники с версионированием.
+- `/admin/analytics` — сводные метрики с meta (источник, период, min segment size).
+- `/admin/audit-logs` — журнал (append-only, redacted), фильтры incl. поиск по `request_id`.
+- `/admin/exports` — асинхронные экспорт, однократная выдача, TTL.
+- `/admin/roles`, `/admin/settings` — роли текущей сессии и настройки (MFA-статус).
+
+### Безопасность (что проверено тестами)
+
+RBAC deny-by-default (403/401), IDOR, privilege escalation через тело запроса,
+идемпотентность мутаций с `Idempotency-Key` (409 IDEMPOTENCY_KEY_REUSED),
+strict-валидация DTO и query-параметров, `X-Request-Id` в каждом ответе,
+rate limit (429), маскирование email/telegram/IP/транзакций в ответах и экспортах,
+отказ в изменении статуса платежей вручную, защита последнего активного SUPER_ADMIN.
+
+OpenAPI админ-эндпоинтов: [`docs/openapi-admin.json`](../docs/openapi-admin.json).
+
 ## 📁 Структура проекта
 
 ```
